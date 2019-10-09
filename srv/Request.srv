@@ -1,0 +1,8 @@
+int32 car_id
+int8 lane_idi
+variable-length array[] t
+variable-length array[] x
+variable-length array[] y
+variable-length array[] headings
+---
+bool success
