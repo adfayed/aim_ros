@@ -1,8 +1,18 @@
-int32 car_id
-int8 lane_idi
-variable-length array[] t
-variable-length array[] x
-variable-length array[] y
-variable-length array[] headings
+uint16 car_id
+uint8 lane_id
+uint8 priority
+float64 t
+float64 x
+float64 y
+float32 heading
+float32 angular_V
+float32 vel
+float32 acc
+float32 length
+float32 width
+float32 max_V
+float32 max_A
+float32 min_A
+float32 max_lateral_g
 ---
 bool success
