@@ -1,5 +1,5 @@
 #!/usr/bin/env python  
-import rospy
+#import rospy
 #from aim.srv import *
 import numpy as np
 import math
@@ -8,6 +8,17 @@ import math
 #import tf_conversions
 #import tf2_ros
 #import geometry_msgs.msg
+
+
+class Car:
+
+	def __init__(self, ID, t, v, w, l):
+		self.car_id = ID
+		self.t = t
+		self.vel = v
+		self.width = w
+		self.length = l
+
 
 class IntersectionManager:
 
@@ -23,10 +34,11 @@ class IntersectionManager:
 		self.__policy = policy
 		#self.service = rospy.Service('car_request', IntersectionManager, self.handle_car_request)
 
-	#def handle_car_request(self, req):
-		#print "Requested car's info [%s  %s  %s  %s  %s %s %s  %s %s %s]"%(req.car_id, req.lane_id, req.priority, req.t, req.x, req.y, req.heading, req.angular_V, req.vel, req.acc)  
-		#successfully_scheduled = self.__schedule(req)
-		#return IntersectionManagerResponse(successfully_scheduled)
+	def handle_car_request(self, req):
+		# print "Requested car's info [%s  %s  %s  %s  %s %s %s  %s %s %s]"%(req.car_id, req.lane_id, req.priority, req.t, req.x, req.y, req.heading, req.angular_V, req.vel, req.acc)
+		successfully_scheduled, xs, ys, hs, vs, ts = self.__schedule(req)
+		return successfully_scheduled
+		# return IntersectionManagerResponse(successfully_scheduled)
 
 	def __schedule(self, car):
 		"""
@@ -41,9 +53,9 @@ class IntersectionManager:
 		"""
 		cur_t = car.t
 		time = (cur_t * 10) % 1000
-		if time == 0
+		if time == 0:
 			time = 1000
-		T_old = time - 1
+		T_old = int(time - 1)
 		self.reservations[T_old] = np.zeros((self.grid_length, self.grid_length))
 
 		##########################################################################
@@ -56,20 +68,21 @@ class IntersectionManager:
 		# Check if the car is clear using the correct policy
 		if self.policy == 0:
 			success, xs, ys, headings, vs, ts = self.__ourPolicy(car)
-		elif self.policy == 1:
-			success, xs, ys, headings, vs, ts = self.__dresnerStonePolicy(car)
-		elif self.policy == 2:
-			success, xs, ys, headings, vs, ts = self.__trafficLightPolicy(car)
-		elif self.policy == 3:
-			success, xs, ys, headings, vs, ts = self.__stopSignPolicy(car)
+		# elif self.policy == 1:
+			# success, xs, ys, headings, vs, ts = self.__dresnerStonePolicy(car)
+		# elif self.policy == 2:
+			# success, xs, ys, headings, vs, ts = self.__trafficLightPolicy(car)
+		# elif self.policy == 3:
+			# success, xs, ys, headings, vs, ts = self.__stopSignPolicy(car)
 		else:
-			success = false
+			success = False
 			xs = []
 			ys = []
 			headings = []
 			vs = []
 			ts = []
-		
+
+		return success, xs, ys, headings, vs, ts
 
 	def __ourPolicy(self, car):
 		"""
@@ -88,17 +101,17 @@ class IntersectionManager:
 		car_l = car.length
 
 		# Calculate the initial bounding box
-		box = np.array([[[xs[0] - car.car_w],
+		box = np.array([[[xs[0] - (car_w / 2)],
 						 [ys[0]],
 						 [1]],
-						[[xs[0] + car.car_w],
+						[[xs[0] + (car_w / 2)],
 						 [ys[0]],
 						 [1]],
-						[[xs[0] - car.car_w],
-						 [ys[0] - car.car_l],
+						[[xs[0] - (car_w / 2)],
+						 [ys[0] - car_l],
 						 [1]],
-						[[xs[0] + car.car_w],
-						 [ys[0] - car.car_l],
+						[[xs[0] + (car_w / 2)],
+						 [ys[0] - car_l],
 						 [1]]])
 		# Rotate so heading in correct direction
 		T = np.array([[1, 0, -xs[0]],
@@ -108,21 +121,21 @@ class IntersectionManager:
 					  [np.sin(np.radians(-hs[0])), np.cos(np.radians(-hs[0])), 0],
 					  [0, 0, 1]])
 		R = np.around(R, decimals=10)
-		for b in box:
-			b = np.dot(np.dot(np.dot(np.linalg.inv(T), R) , T) ,b)
+		for b in range(4):
+			box[b] = np.dot(np.dot(np.dot(np.linalg.inv(T), R), T), box[b])
 
-		temp_res = np.zeros((len(ts), self.grid_length, self.grid_length))	# Hold the temp grids
-		indices = [i for i in range(len(ts))]	# Hold the index of reservations the grid in temp_res came from
+		temp_res = np.zeros((len(ts), self.grid_length, self.grid_length))		# Hold the temp grids
+		indices = [i for i in range(len(ts))]		# Hold the index of reservations the grid in temp_res came from
 		collision = False
 
 		# Check for collisions at each time
 		for time in range(len(ts)):
 			# Get the index of the grid in reservations
-			res_index = (ts[time] * 10) % 1000
+			res_index = int((ts[time] * 10) % 1000)
 			if res_index == 0:
 				res_index = 1000
-			temp_res[time] = self.reservations[res_index]	# Copy the grid
-			indices[time] = res_index	# Save the index
+			temp_res[time] = self.reservations[res_index]		# Copy the grid
+			indices[time] = res_index		# Save the index
 
 			# Update the position of the bounding box
 			if time > 0:
@@ -133,8 +146,8 @@ class IntersectionManager:
 							  [0, 1, delta_y],
 							  [0, 0, 1]])
 				# Translate the box to the new position
-				for b in box:
-					b = T.dot(b)
+				for b in range(4):
+					box[b] = T.dot(box[b])
 				# Rotate the box if needed
 				if delta_h != 0:
 					T = np.array([[1, 0, -xs[time]],
@@ -144,8 +157,8 @@ class IntersectionManager:
 								  [np.sin(np.radians(-delta_h)), np.cos(np.radians(-delta_h)), 0],
 								  [0, 0, 1]])
 					R = np.around(R, decimals=10)
-					for b in box:
-						b = np.dot(np.dot(np.dot(np.linalg.inv(T), R) , T) ,b)
+					for b in range(4):
+						box[b] = np.dot(np.dot(np.dot(np.linalg.inv(T), R), T), box[b])
 
 			mode = 0
 			if box.min() < 0:
@@ -168,8 +181,8 @@ class IntersectionManager:
 					end_x = np.around(box[points[j+1]][0][0], decimals=10)
 					end_y = np.around(box[points[j+1]][1][0], decimals=10)
 					# Get the starting grid coords
-					grid_x = math.floor(start_x/self.grid_size)
-					grid_y = math.floor(start_y/self.grid_size)
+					grid_x = int(math.floor(start_x/self.grid_size))
+					grid_y = int(math.floor(start_y/self.grid_size))
 					# Check that the grid position is valid
 					if grid_x < 0 or grid_x >= self.grid_length:
 						continue
@@ -193,7 +206,7 @@ class IntersectionManager:
 							collision = True
 							break
 						temp_res[time][grid_y][grid_x - 1] = 1
-					if on_bottom_line and grid > 0:
+					if on_bottom_line and grid_y > 0:
 						# Check the grid bellow
 						if self.reservations[res_index][grid_y - 1][grid_x] == 1:
 							collision = True
@@ -216,14 +229,14 @@ class IntersectionManager:
 						# Get the slope to the reference point
 						delta_x = check_x - start_x
 						delta_y = check_y - start_y
-						if delta_x ==  0:
+						if delta_x == 0:
 							temp_m = float("inf")
 						else:
 							temp_m = np.around(delta_y / delta_x, decimals=10)
 						# Update the grid coords
-						if temp_m > m:	# Go right
+						if temp_m > m:		# Go right
 							grid_x += 1
-						elif temp_m < m:	# Go up
+						elif temp_m < m:		# Go up
 							grid_y += 1
 							# Check the grid to the left if the line is on the grid line
 							if m == float("inf") and start_x == check_x - self.grid_size and grid_x > 0:
@@ -234,7 +247,7 @@ class IntersectionManager:
 									collision = True
 									break
 								temp_res[time][grid_y][grid_x - 1] = 1
-						else:	# Go up and right
+						else:		# Go up and right
 							grid_x += 1
 							grid_y += 1
 							# Make sure we are not trying to mark a grid off the intersection
@@ -274,8 +287,8 @@ class IntersectionManager:
 					end_x = np.around(box[points[j+2]][0][0], decimals=10)
 					end_y = np.around(box[points[j+2]][1][0], decimals=10)
 					# Get the starting grid coords
-					grid_x = math.floor(start_x / self.grid_size)
-					grid_y = math.floor(start_y / self.grid_size)
+					grid_x = int(math.floor(start_x / self.grid_size))
+					grid_y = int(math.floor(start_y / self.grid_size))
 					# Check if the grid position is valid
 					if grid_x < 0 or grid_x >= self.grid_length:
 						continue
@@ -320,7 +333,7 @@ class IntersectionManager:
 						else:
 							temp_m = np.around(delta_y / delta_x, decimals=10)
 						# Update grid coords
-						if temp_m < m:	# Go right
+						if temp_m < m:		# Go right
 							grid_x += 1
 							# Check the grid square above, if the line is on the grid line
 							if m == 0 and start_y == check_y + self.grid_size:
@@ -331,9 +344,9 @@ class IntersectionManager:
 									collision = True
 									break
 								temp_res[time][grid_y + 1][grid_x] = 1
-						elif temp_m > m:	# Go down
+						elif temp_m > m:		# Go down
 							grid_y -= 1
-						else:	# Go down and right
+						else:		# Go down and right
 							grid_x += 1
 							grid_y -= 1
 							# Make sure we are not trying to mark a grid off the intersection
@@ -375,9 +388,9 @@ class IntersectionManager:
 					end_x = np.around(box[points[j - 1]][0][0], decimals=10)
 					end_y = np.around(box[points[j - 1]][1][0], decimals=10)
 					# Get the starting grid coords
-					grid_x = math.floor(start_x / self.grid_size)
-					grid_y = math.floor(start_y / self.grid_size)
-					# Check that ht egrid position is valid
+					grid_x = int(math.floor(start_x / self.grid_size))
+					grid_y = int(math.floor(start_y / self.grid_size))
+					# Check that the grid position is valid
 					if grid_x < 0 or grid_x >= self.grid_length:
 						continue
 					if grid_y < 0 or grid_y >= self.grid_length:
@@ -392,7 +405,7 @@ class IntersectionManager:
 					check_x = grid_x * self.grid_size
 					check_y = grid_y * self.grid_size
 					# Check if the line is on the edge/corner of a grid square
-					if start_x == check_x and grid > 0:
+					if start_x == check_x and grid_x > 0:
 						# Check the grid to the left
 						if self.reservations[res_index][grid_y][grid_x - 1] == 1:
 							collision = True
@@ -433,8 +446,8 @@ class IntersectionManager:
 					end_x = np.around(box[points[j - 2]][0][0], decimals=10)
 					end_y = np.around(box[points[j - 2]][1][0], decimals=10)
 					# Get the starting grid coords
-					grid_x = math.floor(start_x / self.grid_size)
-					grid_y = math.floor(start_y / self.grid_size)
+					grid_x = int(math.floor(start_x / self.grid_size))
+					grid_y = int(math.floor(start_y / self.grid_size))
 					# Check that the grid position is valid
 					if grid_x < 0 or grid_x >= self.grid_length:
 						continue
@@ -451,11 +464,11 @@ class IntersectionManager:
 					check_y = grid_y * self.grid_size
 					# Check if the line is on the edge of a grid square
 					if start_y == check_y and grid_y > 0:
-						# Check to the left
+						# Check the grid below
 						if self.reservations[res_index][grid_y - 1][grid_x] == 1:
 							collision = True
 							break
-						temp_res[time][grid_y][grid_x] = 1
+						temp_res[time][grid_y - 1][grid_x] = 1
 					while check_x >= end_x:
 						grid_x -= 1
 						# Make sure we are not trying to mark a grid off the intersection
@@ -467,7 +480,7 @@ class IntersectionManager:
 							if self.reservations[res_index][grid_y - 1][grid_x] == 1:
 								collision = True
 								break
-							temp_res[time][grid_y][grid_x] = 1
+							temp_res[time][grid_y - 1][grid_x] = 1
 						# Check if it is already occupied
 						if self.reservations[res_index][grid_y][grid_x] == 1:
 							collision = True
@@ -535,6 +548,16 @@ class IntersectionManager:
 		pass
 
 	def __createTrajectory(self, car, desired_velo):
+		"""
+		:param car = the car we will look at to see if the reservation can be accepted
+		:param desired_velo = the desired velocity for the car by the end of the path
+		:returns: A tuple representing the trajectory.
+				  xs = list of x-coordinates over the path
+				  ys = list of y-coordinates over the path
+				  hs = list of headings over the path
+				  vs = list of velocities over the path
+				  ts = list of timesteps over the path
+		"""
 		pass
 
 	####################### Getters and Setters #######################
@@ -556,7 +579,7 @@ class IntersectionManager:
 
 	@property
 	def grid_length(self):
-		return self.__grid_length
+		return int(self.__grid_length)
 	
 	@grid_length.setter
 	def grid_length(self, value):
@@ -582,10 +605,10 @@ class IntersectionManager:
 def main():
 	gsz = 1
 	isz = 12
-	#rospy.init_node('intersection_manager_server')
+	# rospy.init_node('intersection_manager_server')
 	IM = IntersectionManager(gsz, isz)
-	#rospy.spin()
-	print "Grid Size: %s\nIntersection Size: %s\nGrid Length: %s"%(IM.grid_size, IM.intersection_size, IM.grid_length)
+	# rospy.spin()
+
 
 if __name__ == '__main__':
 	main()
