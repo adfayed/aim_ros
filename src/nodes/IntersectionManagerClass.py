@@ -12,20 +12,30 @@ import math
 
 class Car:
 
-	def __init__(self, ID, t, v, w, l):
-		self.car_id = ID
+	def __init__(self, car_id, lane_id, t, x, y, h, v, l, w, max_a, min_a):
+		self.car_id = car_id
+		self.lane_id = lane_id
 		self.t = t
+		self.x = x
+		self.y = y
+		self.heading = h
 		self.vel = v
 		self.width = w
 		self.length = l
+		self.max_A = max_a
+		self.min_A = min_a
 
 
 class IntersectionManager:
 
-	def __init__(self, gsz, isz, policy=0):
+	def __init__(self, gsz, isz, dMax, dMin, timestep, policy=0):
 		"""
 		:param gsz = the size of each grid square (m)
 		:param isz = the size of the entire intersection (m)
+		:param dMax = distance which cars are starting to request reservations (m)
+		:param dMin = distance after intersection when IM stops tracking car (m)
+		:param timestep = how much time passes in each timestep
+		:param policy = which policy to run. 0 is our method and default
 		"""
 		self.__grid_size = gsz
 		self.__intersection_size = isz
@@ -34,15 +44,16 @@ class IntersectionManager:
 		self.__grid_length = int(math.ceil(self.__intersection_size/self.__grid_size))
 		self.__reservations = np.zeros((1000, self.__grid_length, self.__grid_length))
 		self.__policy = policy
-		self.__dMax = 148		# The distance from the intersection the car starts making requests
-		self.__dMin = 20		# Distance after the intersection we stop worrying about a car
-		self.__timestep = 0.1		# The amount of time to pass in one time step
+		self.__dMax = dMax		# The distance from the intersection the car starts making requests
+		self.__dMin = dMin		# Distance after the intersection we stop worrying about a car
+		self.__timestep = timestep		# The amount of time to pass in one time step
+		self.__lane_q = [[], [], [], [], [], [], [], [], [], [], [], []]		# List to indicate which cars are first in the list
 		#self.service = rospy.Service('car_request', IntersectionManager, self.handle_car_request)
 
 	def handle_car_request(self, req):
 		# print "Requested car's info [%s  %s  %s  %s  %s %s %s  %s %s %s]"%(req.car_id, req.lane_id, req.priority, req.t, req.x, req.y, req.heading, req.angular_V, req.vel, req.acc)
 		successfully_scheduled, xs, ys, hs, vs, ts = self.__schedule(req)
-		return successfully_scheduled
+		return successfully_scheduled, xs, ys, hs, vs, ts
 		# return IntersectionManagerResponse(successfully_scheduled)
 
 	def __schedule(self, car):
@@ -63,12 +74,18 @@ class IntersectionManager:
 		T_old = int(time - 1)
 		self.reservations[T_old] = np.zeros((self.grid_length, self.grid_length))
 
-		##########################################################################
-		###
-		### TODO: Check if the car the first in the lane without a reservation
-		###		  Reject the request if it not first
-		###
-		##########################################################################
+		lane = car.lane_id		# Get the lane of the car
+		car_id = car.car_id		# Get the car's id
+		# Check if that lane has a list of cars already waiting
+		if len(self.lane_q[lane]) != 0:
+			# Check if this car is not the first in line
+			if self.lane_q[lane][0] != car_id:
+				# Check if the car is not in the list
+				if car_id not in self.lane_q[lane]:
+					# Add the car to the list
+					self.lane_q[lane].append(car_id)
+				# Ignore the car's request
+				return False, [], [], [], [], []
 
 		# Check if the car is clear using the correct policy
 		if self.policy == 0:
@@ -86,6 +103,15 @@ class IntersectionManager:
 			headings = []
 			vs = []
 			ts = []
+
+		# If successfully scheduled, remove the car if its in the queue
+		if success:
+			if len(self.lane_q[lane]) != 0 and car_id in self.lane_q[lane]:
+				self.lane_q[lane].remove(car_id)
+		# If not successfully scheduled, add the car if it isn't in the queue
+		if not success:
+			if len(self.lane_q[lane]) != 0 and car_id not in self.lane_q[lane]:
+				self.lane_q[lane].append(car_id)
 
 		return success, xs, ys, headings, vs, ts
 
@@ -137,8 +163,6 @@ class IntersectionManager:
 		for time in range(len(ts)):
 			# Get the index of the grid in reservations
 			res_index = int((ts[time] * 10) % 1000)
-			if res_index == 0:
-				res_index = 1000
 			temp_res[time] = self.reservations[res_index]		# Copy the grid
 			indices[time] = res_index		# Save the index
 
@@ -647,7 +671,7 @@ class IntersectionManager:
 				ts.append(t)
 
 		####################### Section 2: Intersection path (Turn Left, Straight, Turn Right ##########################
-		lane = car.lane % 3
+		lane = car.lane_id % 3
 		if lane == 0:		# Turning right
 			if heading == 0:
 				center_x = self.intersection_size - self.dMax		# X value of the circle path the turn follows
@@ -1029,12 +1053,24 @@ class IntersectionManager:
 	def num_lanes(self, value):
 		self.__num_lanes = value
 
+	@property
+	def lane_q(self):
+		return self.__lane_q
+
+	@lane_q.setter
+	def lane_q(self, value):
+		self.__lane_q = value
+
 
 def main():
-	gsz = 1
-	isz = 12
 	# rospy.init_node('intersection_manager_server')
-	IM = IntersectionManager(gsz, isz)
+	gsz = 1
+	isz = 320
+	dMax = 148
+	dMin = 12
+	timestep = 0.1
+	policy = 0
+	IM = IntersectionManager(gsz, isz, dMax, dMin, timestep, policy)
 	# rospy.spin()
 
 

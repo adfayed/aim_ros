@@ -1,20 +1,32 @@
 import numpy as np
 import math
 
-res = np.zeros((3, 3))
-print res
+
 
 """
 Used testing the IntersectionManagerClass
 
 main():
-car1 = Car(1, 0.1, 15, 2, 3)
-car2 = Car(2, 0.1, 15, 2, 3)
-car3 = Car(3, 0.2, 15, 2, 3)
-success1 = IM.handle_car_request(car1)
-success2 = IM.handle_car_request(car2)
-success3 = IM.handle_car_request(car3)
-print "Car1: %s\nCar2: %s\nCar3: %s" % (success1, success2, success3)
+gsz = 1
+isz = 74
+dMax = 25
+dMin = 12
+timestep = 1
+policy = 0
+
+car1 = Car(1, 0, 0, 27, 74, 180, 6, 4, 2, 1, -1)
+# car2 = Car(2, 0.1, 15, 2, 3)
+# car3 = Car(3, 0.2, 15, 2, 3)
+success1, xs1, ys1, hs1, vs1, ts1 = IM.handle_car_request(car1)
+# success2 = IM.handle_car_request(car2)
+# success3 = IM.handle_car_request(car3)
+print(success1)
+print(xs1)
+print(ys1)
+print(hs1)
+print(vs1)
+print(ts1)
+# print "Car1: %s\nCar2: %s\nCar3: %s" % (success1, success2, success3)
 
 calculateTrajectories():
 if car.car_id == 1:
