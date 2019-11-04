@@ -29,9 +29,14 @@ class IntersectionManager:
 		"""
 		self.__grid_size = gsz
 		self.__intersection_size = isz
+		self.__lane_width = 4
+		self.__num_lanes = 6
 		self.__grid_length = int(math.ceil(self.__intersection_size/self.__grid_size))
 		self.__reservations = np.zeros((1000, self.__grid_length, self.__grid_length))
 		self.__policy = policy
+		self.__dMax = 148		# The distance from the intersection the car starts making requests
+		self.__dMin = 20		# Distance after the intersection we stop worrying about a car
+		self.__timestep = 0.1		# The amount of time to pass in one time step
 		#self.service = rospy.Service('car_request', IntersectionManager, self.handle_car_request)
 
 	def handle_car_request(self, req):
@@ -558,7 +563,344 @@ class IntersectionManager:
 				  vs = list of velocities over the path
 				  ts = list of timesteps over the path
 		"""
-		pass
+		#####################################################
+		###
+		### TODO: Figure out best way to use desired_velo
+		###
+		#####################################################
+		xs = [car.x]
+		ys = [car.y]
+		heading = car.heading
+		hs = [heading]
+		velo = car.vel
+		vs = [velo]
+		t = car.t
+		ts = [t]
+
+		####################### Section 1: Straight path from dMax to intersetion ##########################
+		if heading == 0:
+			delta_x = 0
+			delta_y = 1
+			end_x = car.x
+			end_y = self.dMax
+			increasing = True
+		elif heading == 90:
+			delta_x = 1
+			delta_y = 0
+			end_x = self.dMax
+			end_y = car.y
+			increasing = True
+		elif heading == 180:
+			delta_x = 0
+			delta_y = -1
+			end_x = car.x
+			end_y = self.intersection_size - self.dMax
+			increasing = False
+		elif heading == 270:
+			delta_x = -1
+			delta_y = 0
+			end_x = self.intersection_size - self.dMax
+			end_y = car.y
+			increasing = False
+		else:
+			delta_x = 0
+			delta_y = 0
+			end_x = -1
+			end_y = -1
+			increasing = False
+
+		new_x = car.x
+		new_y = car.y
+		time_left = 0
+		while new_x != end_x or new_y != end_y:
+			new_x, new_y = self.__nextStraightPoint(new_x, new_y, velo, 0, delta_x, delta_y, self.timestep)
+			if (increasing and new_x > end_x) or (not increasing and new_x < end_x):
+				dist_traveled = abs(xs[len(xs) - 1] - end_x)
+				time_left = self.timestep - (dist_traveled / velo)
+				new_x = end_x
+			if (increasing and new_y > end_y) or (not increasing and new_y < end_y):
+				dist_traveled = abs(xs[len(xs) - 1] - end_x)
+				time_left = self.timestep - (dist_traveled / velo)
+				new_y = end_y
+			if time_left == 0:
+				xs.append(new_x)
+				ys.append(new_y)
+				hs.append(heading)
+				vs.append(velo)
+				t += self.timestep
+				ts.append(t)
+
+		####################### Section 2: Intersection path (Turn Left, Straight, Turn Right ##########################
+		lane = car.lane % 3
+		if lane == 0:		# Turning right
+			if heading == 0:
+				center_x = self.intersection_size - self.dMax
+				center_y = self.dMax
+				end_x = self.intersection_size - self.dMax
+				end_y = self.dMax + (self.lane_width / 2)
+				end_h = 90
+			elif heading == 90:
+				center_x = self.dMax
+				center_y = self.intersection_size - self.dMax
+				end_x = self.dMax + (self.lane_width / 2)
+				end_y = self.intersection_size - self.dMax
+				end_h = 180
+			elif heading == 180:
+				center_x = self.dMax
+				center_y = self.intersection_size - self.dMax
+				end_x = self.dMax
+				end_y = self.intersection_size - self.dMax - (self.lane_width / 2)
+				end_h = 270
+			elif heading == 270:
+				center_x = self.intersection_size - self.dMax
+				center_y = self.intersection_size - self.dMax
+				end_x = self.intersection_size - self.dMax - (self.lane_width / 2)
+				end_y = self.intersection_size - self.dMax
+				end_h = 360
+			else:
+				center_x = 0
+				center_y = 0
+				end_x = -1
+				end_y = -1
+				end_h = 0
+
+			# Account for the leftover time from the last section
+			new_x, new_y, new_h = self.__nextRightPoint(heading, velo, 0, time_left, center_x, center_y)
+			xs.append(new_x)
+			ys.append(new_y)
+			hs.append(new_h)
+			vs.append(velo)
+			t += self.timestep
+			ts.append(t)
+			time_left = 0
+
+			while new_h != end_h:
+				new_x, new_y, new_h = self.__nextRightPoint(new_h, velo, 0, self.timestep, center_x, center_y)
+				if new_h > end_h:
+					radius = self.lane_width
+					delta_h = end_h - hs[len(hs) - 1]
+					dist_traveled = (delta_h / 360) * (2 * np.pi * radius)
+					time_left = self.timestep - (dist_traveled / velo)
+					new_x = end_x
+					new_y = end_y
+					if end_h == 360:
+						new_h = 0
+					else:
+						new_h = end_h
+					heading = new_h
+				if time_left == 0:
+					xs.append(new_x)
+					ys.append(new_y)
+					hs.append(new_h)
+					vs.append(velo)
+					t += self.timestep
+					ts.append(t)
+
+		elif lane == 1:		# Going straight
+			if heading == 0:
+				delta_x = 0
+				delta_y = 1
+				end_x = car.x
+				end_y = self.intersection_size - self.dMax
+				increasing = True
+			elif heading == 90:
+				delta_x = 1
+				delta_y = 0
+				end_x = self.intersection_size - self.dMax
+				end_y = car.y
+				increasing = True
+			elif heading == 180:
+				delta_x = 0
+				delta_y = -1
+				end_x = car.x
+				end_y = self.dMax
+				increasing = False
+			elif heading == 270:
+				delta_x = -1
+				delta_y = 0
+				end_x = self.dMax
+				end_y = car.y
+				increasing = False
+			else:
+				delta_x = 0
+				delta_y = 0
+				end_x = -1
+				end_y = -1
+				increasing = False
+
+			# Account for the leftover time from the last section
+			new_x, new_y = self.__nextStraightPoint(new_x, new_y, velo, 0, delta_x, delta_y, time_left)
+			xs.append(new_x)
+			ys.append(new_y)
+			hs.append(heading)
+			vs.append(velo)
+			t += self.timestep
+			ts.append(t)
+			time_left = 0
+
+			while new_x != end_x or new_y != end_y:
+				new_x, new_y = self.__nextStraightPoint(new_x, new_y, velo, 0, delta_x, delta_y, self.timestep)
+				if (increasing and new_x > end_x) or (not increasing and new_x < end_x):
+					dist_traveled = abs(xs[len(xs) - 1] - end_x)
+					time_left = self.timestep - (dist_traveled / velo)
+					new_x = end_x
+				if (increasing and new_y > end_y) or (not increasing and new_y < end_y):
+					dist_traveled = abs(xs[len(xs) - 1] - end_x)
+					time_left = self.timestep - (dist_traveled / velo)
+					new_y = end_y
+				if time_left == 0:
+					xs.append(new_x)
+					ys.append(new_y)
+					hs.append(heading)
+					vs.append(velo)
+					t += self.timestep
+					ts.append(t)
+
+		elif lane == 2:		# Turning Left
+			if heading == 0:
+				center_x = self.dMax
+				center_y = self.dMax
+				end_x = self.dMax
+				end_y = self.intersection_size - self.dMax - (self.lane_width * 2.5)
+				end_h = 270
+			elif heading == 90:
+				center_x = self.dMax
+				center_y = self.intersection_size - self.dMax
+				end_x = self.intersection_size - self.dMax - (self.lane_width * 2.5)
+				end_y = self.intersection_size - self.dMax
+				end_h = 0
+			elif heading == 180:
+				center_x = self.intersection_size - self.dMax
+				center_y = self.intersection_size - self.dMax
+				end_x = self.intersection_size - self.dMax
+				end_y = self.dMax + (self.lane_width * 2.5)
+				end_h = 90
+			elif heading == 270:
+				center_x = self.intersection_size - self.dMax
+				center_y = self.dMax
+				end_x = self.dMax + (self.lane_width * 2.5)
+				end_y = self.dMax
+				end_h = 180
+			else:
+				center_x = 0
+				center_y = 0
+				end_x = -1
+				end_y = -1
+				end_h = 0
+
+			# Account for the leftover time from the last section
+			new_x, new_y, new_h = self.__nextLeftPoint(heading, velo, 0, time_left, center_x, center_y)
+			xs.append(new_x)
+			ys.append(new_y)
+			hs.append(new_h)
+			vs.append(velo)
+			t += self.timestep
+			ts.append(t)
+			time_left = 0
+
+			while new_h != end_h:
+				new_x, new_y, new_h = self.__nextLeftPoint(new_h, velo, 0, time_left, center_x, center_y)
+				if new_h < end_h:
+					radius = self.lane_width * 3.5
+					delta_h = end_h - hs[len(hs) - 1]
+					dist_traveled = (delta_h / 360) * (2 * np.pi * radius)
+					time_left = self.timestep - (dist_traveled / velo)
+					new_x = end_x
+					new_y = end_y
+					new_h = end_h
+					heading = new_h
+				if time_left == 0:
+					xs.append(new_x)
+					ys.append(new_y)
+					hs.append(new_h)
+					vs.append(velo)
+					t += self.timestep
+					ts.append(t)
+
+		####################### Section 3: Go straight until dMin ##########################
+		if heading == 0:
+			delta_x = 0
+			delta_y = 1
+			end_x = car.x
+			end_y = self.intersection_size - self.dMax + self.dMin
+			increasing = True
+		elif heading == 90:
+			delta_x = 1
+			delta_y = 0
+			end_x = self.intersection_size - self.dMax + self.dMin
+			end_y = car.y
+			increasing = True
+		elif heading == 180:
+			delta_x = 0
+			delta_y = -1
+			end_x = car.x
+			end_y = self.dMax - self.dMin
+			increasing = False
+		elif heading == 270:
+			delta_x = -1
+			delta_y = 0
+			end_x = self.dMax - self.dMin
+			end_y = car.y
+			increasing = False
+		else:
+			delta_x = 0
+			delta_y = 0
+			end_x = -1
+			end_y = -1
+			increasing = False
+
+		# Account for the leftover time from the last section
+		new_x, new_y = self.__nextStraightPoint(new_x, new_y, velo, 0, delta_x, delta_y, time_left)
+		xs.append(new_x)
+		ys.append(new_y)
+		hs.append(heading)
+		vs.append(velo)
+		t += self.timestep
+		ts.append(t)
+
+		while True:
+			new_x, new_y = self.__nextStraightPoint(new_x, new_y, velo, 0, delta_x, delta_y, self.timestep)
+			xs.append(new_x)
+			ys.append(new_y)
+			hs.append(heading)
+			vs.append(velo)
+			t += self.timestep
+			ts.append(t)
+			if (increasing and new_x > end_x) or (not increasing and new_x < end_x):
+				break
+			if (increasing and new_y > end_y) or (not increasing and new_y < end_y):
+				break
+
+		# Return the trajectory
+		return xs, ys, hs, vs, ts
+
+	def __nextStraightPoint(self, cur_x, cur_y, cur_v, accel, delta_x, delta_y, timestep):
+		distance = (0.5 * accel * (timestep**2) + (cur_v * timestep))
+		new_x = distance * delta_x + cur_x
+		new_y = distance * delta_y + cur_y
+		return new_x, new_y
+
+	def __nextRightPoint(self, cur_h, cur_v, accel, timestep, center_x, center_y):
+		distance = (0.5 * accel * (timestep**2) + (cur_v * timestep))		# Arc length
+		radius = self.lane_width / 2
+		arc_measure = (distance * 360) / (2 * np.pi * radius)
+		angle = 180 - cur_h - arc_measure
+		new_x = radius * np.cos(np.deg2rad(angle)) + center_x
+		new_y = radius * np.cos(np.deg2rad(angle)) + center_y
+		new_h = cur_h + arc_measure
+		return new_x, new_y, new_h
+
+	def __nextLeftPoint(self, cur_h, cur_v, accel, timestep, center_x, center_y):
+		if cur_h == 0:
+			cur_h = 360
+		distance = (0.5 * accel * (timestep ** 2) + (cur_v * timestep))  # Arc length
+		radius = self.lane_width * 3.5
+		arc_measure = (distance * 360) / (2 * np.pi * radius)
+		angle = 360 - cur_h + arc_measure
+		new_x = radius * np.cos(np.deg2rad(angle)) + center_x
+		new_y = radius * np.cos(np.deg2rad(angle)) + center_y
+		new_h = cur_h - arc_measure
+		return new_x, new_y, new_h
 
 	####################### Getters and Setters #######################
 	@property
@@ -600,7 +942,47 @@ class IntersectionManager:
 	@policy.setter
 	def policy(self, value):
 		self.__policy = value
-	
+
+	@property
+	def dMax(self):
+		return self.__dMax
+
+	@dMax.setter
+	def dMax(self, value):
+		self.__dMax = value
+
+	@property
+	def dMin(self):
+		return self.__dMin
+
+	@dMin.setter
+	def dMin(self, value):
+		self.__dMin = value
+
+	@property
+	def timestep(self):
+		return self.__timestep
+
+	@timestep.setter
+	def timestep(self, value):
+		self.__timestep = value
+
+	@property
+	def lane_width(self):
+		return self.__lane_width
+
+	@lane_width.setter
+	def lane_width(self, value):
+		self.__lane_width = value
+
+	@property
+	def num_lanes(self):
+		return self.__num_lanes
+
+	@num_lanes.setter
+	def num_lanes(self, value):
+		self.__num_lanes = value
+
 
 def main():
 	gsz = 1
