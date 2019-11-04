@@ -563,11 +563,7 @@ class IntersectionManager:
 				  vs = list of velocities over the path
 				  ts = list of timesteps over the path
 		"""
-		#####################################################
-		###
-		### TODO: Figure out best way to use desired_velo
-		###
-		#####################################################
+		# Initialize our lists
 		xs = [car.x]
 		ys = [car.y]
 		heading = car.heading
@@ -577,13 +573,22 @@ class IntersectionManager:
 		t = car.t
 		ts = [t]
 
+		# Determine what the acceleration should be for the vehicle
+		delta_v = desired_velo - velo
+		if delta_v >= 0:
+			accel = min(car.max_A, delta_v / 2)
+			speeding_up = True
+		else:
+			accel = max(car.min_A, delta_v / 2)
+			speeding_up = False
+
 		####################### Section 1: Straight path from dMax to intersetion ##########################
 		if heading == 0:
-			delta_x = 0
-			delta_y = 1
-			end_x = car.x
-			end_y = self.dMax
-			increasing = True
+			delta_x = 0		# Indicates how x values change
+			delta_y = 1		# Indicates how y values change
+			end_x = car.x		# The goal x value
+			end_y = self.dMax		# The goal y value
+			increasing = True		# Indicates if the value we will check is increasing
 		elif heading == 90:
 			delta_x = 1
 			delta_y = 0
@@ -609,19 +614,30 @@ class IntersectionManager:
 			end_y = -1
 			increasing = False
 
-		new_x = car.x
-		new_y = car.y
-		time_left = 0
-		while new_x != end_x or new_y != end_y:
-			new_x, new_y = self.__nextStraightPoint(new_x, new_y, velo, 0, delta_x, delta_y, self.timestep)
+		new_x = car.x		# Get the current x of the car
+		new_y = car.y		# Get the current y of the car
+		time_left = 0		# Indicates how much time is left if the car finishes the section without using the whole timestep
+		while time_left == 0:
+			# Get the new x and y values based on the velocity and acceleration of the car
+			new_x, new_y = self.__nextStraightPoint(new_x, new_y, velo, accel, delta_x, delta_y, self.timestep)
+			# Check if the car has passed its goal in the x direction
 			if (increasing and new_x > end_x) or (not increasing and new_x < end_x):
-				dist_traveled = abs(xs[len(xs) - 1] - end_x)
-				time_left = self.timestep - (dist_traveled / velo)
-				new_x = end_x
+				dist_traveled = abs(xs[len(xs) - 1] - end_x)		# The distance from the last point to the goal
+				final_v = np.sqrt(velo**2 + 2 * accel * dist_traveled)
+				time_left = self.timestep - ((dist_traveled * 2) / (final_v + velo))		# How much longer to finish this timestep in the next section
+				new_x = end_x		# Make sure the car is at its goal position
+			# Check if the car has passed its goal in the y direction
 			if (increasing and new_y > end_y) or (not increasing and new_y < end_y):
-				dist_traveled = abs(xs[len(xs) - 1] - end_x)
-				time_left = self.timestep - (dist_traveled / velo)
-				new_y = end_y
+				dist_traveled = abs(ys[len(ys) - 1] - end_y)		# The distance from the last point to the goal
+				final_v = np.sqrt(velo**2 + 2 * accel * dist_traveled)
+				time_left = self.timestep - ((dist_traveled * 2) / (final_v + velo))
+				new_y = end_y		# Make sure the car is at its goal position
+			# Update the velocity of the car
+			velo += accel * (self.timestep - time_left)
+			# Set acceleration to 0 if the car is at its desired velocity
+			if (speeding_up and velo >= desired_velo) or (not speeding_up and velo <= desired_velo):
+				accel = 0
+			# We can add the new points if the car finished the timestep
 			if time_left == 0:
 				xs.append(new_x)
 				ys.append(new_y)
@@ -634,11 +650,11 @@ class IntersectionManager:
 		lane = car.lane % 3
 		if lane == 0:		# Turning right
 			if heading == 0:
-				center_x = self.intersection_size - self.dMax
-				center_y = self.dMax
-				end_x = self.intersection_size - self.dMax
-				end_y = self.dMax + (self.lane_width / 2)
-				end_h = 90
+				center_x = self.intersection_size - self.dMax		# X value of the circle path the turn follows
+				center_y = self.dMax								# Y value of the circle path the turn follows
+				end_x = self.intersection_size - self.dMax			# Goal's x value
+				end_y = self.dMax + (self.lane_width / 2)			# Goal's y value
+				end_h = 90											# Goal's heading
 			elif heading == 90:
 				center_x = self.dMax
 				center_y = self.intersection_size - self.dMax
@@ -656,7 +672,7 @@ class IntersectionManager:
 				center_y = self.intersection_size - self.dMax
 				end_x = self.intersection_size - self.dMax - (self.lane_width / 2)
 				end_y = self.intersection_size - self.dMax
-				end_h = 360
+				end_h = 360		# Use 360 instead of 0 for mathematical purposes, Updates to 0 later
 			else:
 				center_x = 0
 				center_y = 0
@@ -665,7 +681,10 @@ class IntersectionManager:
 				end_h = 0
 
 			# Account for the leftover time from the last section
-			new_x, new_y, new_h = self.__nextRightPoint(heading, velo, 0, time_left, center_x, center_y)
+			new_x, new_y, new_h = self.__nextRightPoint(heading, velo, accel, time_left, center_x, center_y)
+			velo += accel * time_left
+			if (speeding_up and velo >= desired_velo) or (not speeding_up and velo <= desired_velo):
+				accel = 0
 			xs.append(new_x)
 			ys.append(new_y)
 			hs.append(new_h)
@@ -674,13 +693,15 @@ class IntersectionManager:
 			ts.append(t)
 			time_left = 0
 
-			while new_h != end_h:
-				new_x, new_y, new_h = self.__nextRightPoint(new_h, velo, 0, self.timestep, center_x, center_y)
+			while time_left == 0:
+				new_x, new_y, new_h = self.__nextRightPoint(new_h, velo, accel, self.timestep, center_x, center_y)
+				# Check if the car passes its goal point
 				if new_h > end_h:
-					radius = self.lane_width
+					radius = self.lane_width		# Radius of circle path
 					delta_h = end_h - hs[len(hs) - 1]
 					dist_traveled = (delta_h / 360) * (2 * np.pi * radius)
-					time_left = self.timestep - (dist_traveled / velo)
+					final_v = np.sqrt(velo**2 + 2 * accel * dist_traveled)
+					time_left = self.timestep - ((dist_traveled * 2) / (final_v + velo))
 					new_x = end_x
 					new_y = end_y
 					if end_h == 360:
@@ -688,6 +709,9 @@ class IntersectionManager:
 					else:
 						new_h = end_h
 					heading = new_h
+				velo += accel * (self.timestep - time_left)
+				if (speeding_up and velo >= desired_velo) or (not speeding_up and velo <= desired_velo):
+					accel = 0
 				if time_left == 0:
 					xs.append(new_x)
 					ys.append(new_y)
@@ -729,7 +753,10 @@ class IntersectionManager:
 				increasing = False
 
 			# Account for the leftover time from the last section
-			new_x, new_y = self.__nextStraightPoint(new_x, new_y, velo, 0, delta_x, delta_y, time_left)
+			new_x, new_y = self.__nextStraightPoint(new_x, new_y, velo, accel, delta_x, delta_y, time_left)
+			velo += accel * time_left
+			if (speeding_up and velo >= desired_velo) or (not speeding_up and velo <= desired_velo):
+				accel = 0
 			xs.append(new_x)
 			ys.append(new_y)
 			hs.append(heading)
@@ -738,16 +765,21 @@ class IntersectionManager:
 			ts.append(t)
 			time_left = 0
 
-			while new_x != end_x or new_y != end_y:
-				new_x, new_y = self.__nextStraightPoint(new_x, new_y, velo, 0, delta_x, delta_y, self.timestep)
+			while time_left == 0:
+				new_x, new_y = self.__nextStraightPoint(new_x, new_y, velo, accel, delta_x, delta_y, self.timestep)
 				if (increasing and new_x > end_x) or (not increasing and new_x < end_x):
 					dist_traveled = abs(xs[len(xs) - 1] - end_x)
-					time_left = self.timestep - (dist_traveled / velo)
+					final_v = np.sqrt(velo**2 + 2 * accel * dist_traveled)
+					time_left = self.timestep - ((dist_traveled * 2) / (final_v + velo))
 					new_x = end_x
 				if (increasing and new_y > end_y) or (not increasing and new_y < end_y):
-					dist_traveled = abs(xs[len(xs) - 1] - end_x)
-					time_left = self.timestep - (dist_traveled / velo)
+					dist_traveled = abs(ys[len(ys) - 1] - end_y)
+					final_v = np.sqrt(velo**2 + 2 * accel * dist_traveled)
+					time_left = self.timestep - ((dist_traveled * 2) / (final_v + velo))
 					new_y = end_y
+				velo += accel * (self.timestep - time_left)
+				if (speeding_up and velo >= desired_velo) or (not speeding_up and velo <= desired_velo):
+					accel = 0
 				if time_left == 0:
 					xs.append(new_x)
 					ys.append(new_y)
@@ -789,7 +821,10 @@ class IntersectionManager:
 				end_h = 0
 
 			# Account for the leftover time from the last section
-			new_x, new_y, new_h = self.__nextLeftPoint(heading, velo, 0, time_left, center_x, center_y)
+			new_x, new_y, new_h = self.__nextLeftPoint(heading, velo, accel, time_left, center_x, center_y)
+			velo += accel * time_left
+			if (speeding_up and velo >= desired_velo) or (not speeding_up and velo <= desired_velo):
+				accel = 0
 			xs.append(new_x)
 			ys.append(new_y)
 			hs.append(new_h)
@@ -798,17 +833,21 @@ class IntersectionManager:
 			ts.append(t)
 			time_left = 0
 
-			while new_h != end_h:
-				new_x, new_y, new_h = self.__nextLeftPoint(new_h, velo, 0, time_left, center_x, center_y)
+			while time_left == 0:
+				new_x, new_y, new_h = self.__nextLeftPoint(new_h, velo, accel, time_left, center_x, center_y)
 				if new_h < end_h:
 					radius = self.lane_width * 3.5
 					delta_h = end_h - hs[len(hs) - 1]
 					dist_traveled = (delta_h / 360) * (2 * np.pi * radius)
-					time_left = self.timestep - (dist_traveled / velo)
+					final_v = np.sqrt(velo**2 + 2 * accel * dist_traveled)
+					time_left = self.timestep - ((dist_traveled * 2) / (final_v + velo))
 					new_x = end_x
 					new_y = end_y
 					new_h = end_h
 					heading = new_h
+				velo += accel * (self.timestep - time_left)
+				if (speeding_up and velo >= desired_velo) or (not speeding_up and velo <= desired_velo):
+					accel = 0
 				if time_left == 0:
 					xs.append(new_x)
 					ys.append(new_y)
@@ -850,7 +889,10 @@ class IntersectionManager:
 			increasing = False
 
 		# Account for the leftover time from the last section
-		new_x, new_y = self.__nextStraightPoint(new_x, new_y, velo, 0, delta_x, delta_y, time_left)
+		new_x, new_y = self.__nextStraightPoint(new_x, new_y, velo, accel, delta_x, delta_y, time_left)
+		velo += accel * time_left
+		if (speeding_up and velo >= desired_velo) or (not speeding_up and velo <= desired_velo):
+			accel = 0
 		xs.append(new_x)
 		ys.append(new_y)
 		hs.append(heading)
@@ -858,8 +900,12 @@ class IntersectionManager:
 		t += self.timestep
 		ts.append(t)
 
+		# Continue until the car reaches a point at the goal
 		while True:
-			new_x, new_y = self.__nextStraightPoint(new_x, new_y, velo, 0, delta_x, delta_y, self.timestep)
+			new_x, new_y = self.__nextStraightPoint(new_x, new_y, velo, accel, delta_x, delta_y, self.timestep)
+			velo += accel * self.timestep
+			if (speeding_up and velo >= desired_velo) or (not speeding_up and velo <= desired_velo):
+				accel = 0
 			xs.append(new_x)
 			ys.append(new_y)
 			hs.append(heading)
