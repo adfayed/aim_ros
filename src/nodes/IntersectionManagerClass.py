@@ -752,26 +752,26 @@ class IntersectionManager:
 			if heading == 0:
 				delta_x = 0
 				delta_y = 1
-				end_x = car.x
+				end_x = new_x
 				end_y = self.intersection_size - self.dMax
 				increasing = True
 			elif heading == 90:
 				delta_x = 1
 				delta_y = 0
 				end_x = self.intersection_size - self.dMax
-				end_y = car.y
+				end_y = new_y
 				increasing = True
 			elif heading == 180:
 				delta_x = 0
 				delta_y = -1
-				end_x = car.x
+				end_x = new_x
 				end_y = self.dMax
 				increasing = False
 			elif heading == 270:
 				delta_x = -1
 				delta_y = 0
 				end_x = self.dMax
-				end_y = car.y
+				end_y = new_y
 				increasing = False
 			else:
 				delta_x = 0
@@ -862,10 +862,10 @@ class IntersectionManager:
 			time_left = 0
 
 			while time_left == 0:
-				new_x, new_y, new_h = self.__nextLeftPoint(new_h, velo, accel, time_left, center_x, center_y)
+				new_x, new_y, new_h = self.__nextLeftPoint(new_h, velo, accel, self.timestep, center_x, center_y)
 				if new_h < end_h:
 					radius = self.lane_width * 3.5
-					delta_h = end_h - hs[len(hs) - 1]
+					delta_h = hs[len(hs) - 1] - end_h
 					dist_traveled = (delta_h / 360) * (2 * np.pi * radius)
 					final_v = np.sqrt(velo**2 + 2 * accel * dist_traveled)
 					time_left = self.timestep - ((dist_traveled * 2) / (final_v + velo))
@@ -888,26 +888,26 @@ class IntersectionManager:
 		if heading == 0:
 			delta_x = 0
 			delta_y = 1
-			end_x = car.x
+			end_x = new_x
 			end_y = self.intersection_size - self.dMax + self.dMin
 			increasing = True
 		elif heading == 90:
 			delta_x = 1
 			delta_y = 0
 			end_x = self.intersection_size - self.dMax + self.dMin
-			end_y = car.y
+			end_y = new_y
 			increasing = True
 		elif heading == 180:
 			delta_x = 0
 			delta_y = -1
-			end_x = car.x
+			end_x = new_x
 			end_y = self.dMax - self.dMin
 			increasing = False
 		elif heading == 270:
 			delta_x = -1
 			delta_y = 0
 			end_x = self.dMax - self.dMin
-			end_y = car.y
+			end_y = new_y
 			increasing = False
 		else:
 			delta_x = 0
@@ -960,7 +960,7 @@ class IntersectionManager:
 		arc_measure = (distance * 360) / (2 * np.pi * radius)
 		angle = 180 - cur_h - arc_measure
 		new_x = radius * np.cos(np.deg2rad(angle)) + center_x
-		new_y = radius * np.cos(np.deg2rad(angle)) + center_y
+		new_y = radius * np.sin(np.deg2rad(angle)) + center_y
 		new_h = cur_h + arc_measure
 		return new_x, new_y, new_h
 
@@ -972,7 +972,7 @@ class IntersectionManager:
 		arc_measure = (distance * 360) / (2 * np.pi * radius)
 		angle = 360 - cur_h + arc_measure
 		new_x = radius * np.cos(np.deg2rad(angle)) + center_x
-		new_y = radius * np.cos(np.deg2rad(angle)) + center_y
+		new_y = radius * np.sin(np.deg2rad(angle)) + center_y
 		new_h = cur_h - arc_measure
 		return new_x, new_y, new_h
 
@@ -1069,35 +1069,40 @@ class IntersectionManager:
 def main():
 	# rospy.init_node('intersection_manager_server')
 	gsz = 1
-	isz = 74 #320
-	dMax = 25 #148
-	dMin = 12 #50
-	timestep = 1 #0.1
+	isz = 320
+	dMax = 148
+	dMin = 50
+	timestep = 0.1
 	policy = 0
 	IM = IntersectionManager(gsz, isz, dMax, dMin, timestep, policy)
 	# rospy.spin()
-	car1 = Car(1, 1, 0, dMax + 6, isz, 180, 6, 4, 2, 1, -1)
-	car2 = Car(2, 10, 1, 0, dMax + 6, 90, 6, 4, 2, 1, -1)
+	car1 = Car(1, 2, 0, dMax + 10, isz, 180, 15, 4, 2, 1, -1)
+	#car2 = Car(2, 10, 1, 0, dMax + 6, 90, 6, 4, 2, 1, -1)
 	success1, xs1, ys1, hs1, vs1, ts1 = IM.handle_car_request(car1)
-	print(success1)
-	success2, xs2, ys2, hs2, vs2, ts2 = IM.handle_car_request(car2)
-	print(success2)
-	old_x2 = []
-	old_y2 = []
-	old_h2 = []
-	old_v2 = []
-	old_t2 = []
-	while not success2:
-		print("trying again")
-		old_x2.append(car2.x)
-		old_y2.append(car2.y)
-		old_h2.append(car2.heading)
-		old_v2.append(car2.vel)
-		old_t2.append(car2.t)
-		car2.x = -0.5 * timestep**2 + car2.vel * timestep
-		car2.vel = car2.vel - timestep
-		car2.t = car2.t + timestep
-		success2, xs2, ys2, hs2, vs2, ts2 = IM.handle_car_request(car2)
+	#print(success1)
+	#print(xs1)
+	#print(ys1)
+	#print(hs1)
+	#print(vs1)
+	#print(ts1)
+	#success2, xs2, ys2, hs2, vs2, ts2 = IM.handle_car_request(car2)
+	#print(success2)
+	#old_x2 = []
+	#old_y2 = []
+	#old_h2 = []
+	#old_v2 = []
+	#old_t2 = []
+	#while not success2:
+		#print("trying again")
+		#old_x2.append(car2.x)
+		#old_y2.append(car2.y)
+		#old_h2.append(car2.heading)
+		#old_v2.append(car2.vel)
+		#old_t2.append(car2.t)
+		#car2.x = -0.5 * timestep**2 + car2.vel * timestep
+		#car2.vel = car2.vel - timestep
+		#car2.t = car2.t + timestep
+		#success2, xs2, ys2, hs2, vs2, ts2 = IM.handle_car_request(car2)
 
 	for i in range(len(xs1)):
 		visualize(isz, dMax, dMin, xs1[i], ys1[i], 1)
@@ -1155,7 +1160,7 @@ def visualize(isz, dMax, dMin, x, y, fignum):
 
 	# Plot the points
 	plt.plot(x, y, '*r')
-	plt.pause(0.01)
+	plt.pause(0.1)
 	
 	#plt.show()
 

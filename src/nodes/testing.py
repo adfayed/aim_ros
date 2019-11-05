@@ -1,7 +1,7 @@
 import numpy as np
 import math
 
-print(np.pi)
+
 
 """
 Used testing the IntersectionManagerClass
