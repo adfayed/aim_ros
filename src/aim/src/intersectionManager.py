@@ -2,10 +2,6 @@
 import rospy
 from aim.srv import *
 
-# Incase we need transformations
-import tf_conversions
-import tf2_ros
-import geometry_msgs.msg
 
 # This gets called from the client (car_Manager.py service) with the car's parameters as the req variable.
 def handle_car_request(req):
@@ -23,10 +19,6 @@ def createTrajectory()
 def main():
     rospy.init_node('intersection_manager_server')
     rate = rospy.Rate(100.0)
-
-    # To get transform from TF
-    tfBuffer = tf2_ros.Buffer()
-    listener = tf2_ros.TransformListener(tfBuffer)
 
     s = rospy.Service('car_request', IntersectionManager, handle_car_request)
     
