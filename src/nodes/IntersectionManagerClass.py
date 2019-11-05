@@ -3,6 +3,10 @@
 #from aim.srv import *
 import numpy as np
 import math
+import matplotlib
+matplotlib.use("TkAgg")
+import matplotlib.patches as patches
+import matplotlib.pyplot as plt
 
 # Incase we need transformations
 #import tf_conversions
@@ -681,9 +685,9 @@ class IntersectionManager:
 				end_h = 90											# Goal's heading
 			elif heading == 90:
 				center_x = self.dMax
-				center_y = self.intersection_size - self.dMax
+				center_y = self.dMax
 				end_x = self.dMax + (self.lane_width / 2)
-				end_y = self.intersection_size - self.dMax
+				end_y = self.dMax
 				end_h = 180
 			elif heading == 180:
 				center_x = self.dMax
@@ -1065,14 +1069,95 @@ class IntersectionManager:
 def main():
 	# rospy.init_node('intersection_manager_server')
 	gsz = 1
-	isz = 320
-	dMax = 148
-	dMin = 12
-	timestep = 0.1
+	isz = 74 #320
+	dMax = 25 #148
+	dMin = 12 #50
+	timestep = 1 #0.1
 	policy = 0
 	IM = IntersectionManager(gsz, isz, dMax, dMin, timestep, policy)
 	# rospy.spin()
+	car1 = Car(1, 1, 0, dMax + 6, isz, 180, 6, 4, 2, 1, -1)
+	car2 = Car(2, 10, 1, 0, dMax + 6, 90, 6, 4, 2, 1, -1)
+	success1, xs1, ys1, hs1, vs1, ts1 = IM.handle_car_request(car1)
+	print(success1)
+	success2, xs2, ys2, hs2, vs2, ts2 = IM.handle_car_request(car2)
+	print(success2)
+	old_x2 = []
+	old_y2 = []
+	old_h2 = []
+	old_v2 = []
+	old_t2 = []
+	while not success2:
+		print("trying again")
+		old_x2.append(car2.x)
+		old_y2.append(car2.y)
+		old_h2.append(car2.heading)
+		old_v2.append(car2.vel)
+		old_t2.append(car2.t)
+		car2.x = -0.5 * timestep**2 + car2.vel * timestep
+		car2.vel = car2.vel - timestep
+		car2.t = car2.t + timestep
+		success2, xs2, ys2, hs2, vs2, ts2 = IM.handle_car_request(car2)
 
+	for i in range(len(xs1)):
+		visualize(isz, dMax, dMin, xs1[i], ys1[i], 1)
+
+
+def visualize(isz, dMax, dMin, x, y, fignum):
+	fig = plt.figure(1)
+	plt.cla()
+	# Plot outside boarders
+	plt.plot((0, isz), (0, 0), 'k')
+	plt.plot((isz, isz), (0, isz), 'k')
+	plt.plot((0, isz), (isz, isz), 'k')
+	plt.plot((0, 0), (0, isz), 'k')
+
+	# Plot the boarders for the lanes
+	# Horizontal lines
+	plt.plot((0, dMax), (dMax, dMax), 'k')
+	plt.plot((0, dMax), (isz - dMax, isz - dMax), 'k')
+	plt.plot((isz - dMax, isz), (dMax, dMax), 'k')
+	plt.plot((isz - dMax, isz), (isz - dMax, isz - dMax), 'k')
+	# Vertical lines
+	plt.plot((dMax, dMax), (0, dMax), 'k')
+	plt.plot((isz - dMax, isz - dMax), (0, dMax), 'k')
+	plt.plot((dMax, dMax), (isz - dMax, isz), 'k')
+	plt.plot((isz - dMax, isz - dMax), (isz - dMax, isz), 'k')
+	# Crosswalk lines
+	plt.plot((dMax, dMax), (dMax, isz - dMax), 'y')
+	plt.plot((dMax, isz - dMax), (dMax, dMax), 'y')
+	plt.plot((dMax, isz - dMax), (isz - dMax, isz - dMax), 'y')
+	plt.plot((isz - dMax, isz - dMax), (isz - dMax, dMax), 'y')
+
+	# Lane Seperators
+	# Vertical lines
+	plt.plot((dMax + 4, dMax + 4), (0, dMax), '--y')
+	plt.plot((dMax + 8, dMax + 8), (0, dMax), '--y')
+	plt.plot((dMax + 12, dMax + 12), (0, dMax), '-y')
+	plt.plot((dMax + 16, dMax + 16), (0, dMax), '--y')
+	plt.plot((dMax + 20, dMax + 20), (0, dMax), '--y')
+	plt.plot((dMax + 4, dMax + 4), (isz, isz - dMax), '--y')
+	plt.plot((dMax + 8, dMax + 8), (isz, isz - dMax), '--y')
+	plt.plot((dMax + 12, dMax + 12), (isz, isz - dMax), '-y')
+	plt.plot((dMax + 16, dMax + 16), (isz, isz - dMax), '--y')
+	plt.plot((dMax + 20, dMax + 20), (isz, isz - dMax), '--y')
+	# Horizontal lines
+	plt.plot((0, dMax), (dMax + 4, dMax + 4), '--y')
+	plt.plot((0, dMax), (dMax + 8, dMax + 8),  '--y')
+	plt.plot((0, dMax), (dMax + 12, dMax + 12), '-y')
+	plt.plot((0, dMax), (dMax + 16, dMax + 16), '--y')
+	plt.plot((0, dMax), (dMax + 20, dMax + 20), '--y')
+	plt.plot((isz, isz - dMax), (dMax + 4, dMax + 4), '--y')
+	plt.plot((isz, isz - dMax), (dMax + 8, dMax + 8), '--y')
+	plt.plot((isz, isz - dMax), (dMax + 12, dMax + 12), '-y')
+	plt.plot((isz, isz - dMax), (dMax + 16, dMax + 16), '--y')
+	plt.plot((isz, isz - dMax), (dMax + 20, dMax + 20), '--y')
+
+	# Plot the points
+	plt.plot(x, y, '*r')
+	plt.pause(0.01)
+	
+	#plt.show()
 
 if __name__ == '__main__':
 	main()
