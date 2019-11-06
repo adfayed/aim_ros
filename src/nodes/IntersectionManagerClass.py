@@ -24,6 +24,7 @@ class Car:
 		self.y = y
 		self.heading = h
 		self.vel = v
+		self.max_v = 20
 		self.width = w
 		self.length = l
 		self.max_A = max_a
@@ -93,13 +94,13 @@ class IntersectionManager:
 
 		# Check if the car is clear using the correct policy
 		if self.policy == 0:
-			success, xs, ys, headings, vs, ts = self.__ourPolicy(car)
-		# elif self.policy == 1:
-			# success, xs, ys, headings, vs, ts = self.__dresnerStonePolicy(car)
+			success, xs, ys, headings, vs, ts = self.__ourPolicy(car, car.vel)
+		elif self.policy == 1:
+			success, xs, ys, headings, vs, ts = self.__dresnerStonePolicy(car)
 		# elif self.policy == 2:
 			# success, xs, ys, headings, vs, ts = self.__trafficLightPolicy(car)
-		# elif self.policy == 3:
-			# success, xs, ys, headings, vs, ts = self.__stopSignPolicy(car)
+		elif self.policy == 3:
+			success, xs, ys, headings, vs, ts = self.__stopSignPolicy(car)
 		else:
 			success = False
 			xs = []
@@ -119,7 +120,7 @@ class IntersectionManager:
 
 		return success, xs, ys, headings, vs, ts
 
-	def __ourPolicy(self, car):
+	def __ourPolicy(self, car, desired_velo):
 		"""
 		:param car = the car we will look at to see if the reservation can be accepted
 		:returns: A tuple representing the trajectory. 
@@ -131,7 +132,7 @@ class IntersectionManager:
 				  ts = list of timesteps over the path
 		"""
 		# Get the trajectory along the path if the car maintains its velocity
-		xs, ys, hs, vs, ts = self.__createTrajectory(car, car.vel)
+		xs, ys, hs, vs, ts = self.__createTrajectory(car, desired_velo)
 		car_w = car.width
 		car_l = car.length
 
@@ -541,7 +542,7 @@ class IntersectionManager:
 
 		return success, xs, ys, hs, vs, ts
 
-	def __dresnerStonePolicy(self):
+	def __dresnerStonePolicy(self, car):
 		"""
 		:param car = the car we will look at to see if the reservation can be accepted
 		:returns: A tuple representing the trajectory. 
@@ -552,7 +553,11 @@ class IntersectionManager:
 				  vs = list of velocities over the path
 				  ts = list of timesteps over the path
 		"""
-		pass
+		success, xs, ys, headings, vs, ts = self.__ourPolicy(car, car.max_v)
+		if not success:
+			success, xs, ys, headings, vs, ts = self.__ourPolicy(car, car.velo)
+		return success, xs, ys, headings, vs, ts
+
 
 	def __trafficLightPolicy(self):
 		"""
@@ -567,7 +572,7 @@ class IntersectionManager:
 		"""
 		pass
 
-	def __stopSignPolicy(self):
+	def __stopSignPolicy(self, car):
 		"""
 		:param car = the car we will look at to see if the reservation can be accepted
 		:returns: A tuple representing the trajectory. 
@@ -578,7 +583,41 @@ class IntersectionManager:
 				  vs = list of velocities over the path
 				  ts = list of timesteps over the path
 		"""
-		pass
+		xs = []
+		ys = []
+		hs = []
+		vs = []
+		ts = []
+		
+		# Make sure the car comes to a complete stop first
+		if car.vel != 0:
+			success = False
+			return success, xs, ys, hs, vs, ts
+		
+		# Make sure the car is stopped at the intersection and not before
+		if car.heading == 0:
+			stop_x = car.x
+			stop_y = self.dMax
+		elif car.heading == 90:
+			stop_x = self.dMax
+			stop_y = car.y
+		elif car.heading == 180:
+			stop_x = car.x
+			stop_y = self.intersection_size - self.dMax
+		elif car.heading == 270:
+			stop_x = self.intersection_size - self.dMax
+			stop_y = car.y
+		else:
+			stop_x = -1
+			stop_y = -1
+		if car.x != stop_x or car.y != stop_y:
+			success = False
+			return success, xs, ys, hs, vs, ts
+
+		# Check if the car is clear
+		return self.__ourPolicy(car, car.max_v)
+
+
 
 	def __createTrajectory(self, car, desired_velo):
 		"""
@@ -604,10 +643,10 @@ class IntersectionManager:
 		# Determine what the acceleration should be for the vehicle
 		delta_v = desired_velo - velo
 		if delta_v >= 0:
-			accel = min(car.max_A, delta_v / 2)
+			accel = min(car.max_A, delta_v / 5)
 			speeding_up = True
 		else:
-			accel = max(car.min_A, delta_v / 2)
+			accel = max(car.min_A, delta_v / 5)
 			speeding_up = False
 
 		####################### Section 1: Straight path from dMax to intersetion ##########################
@@ -645,6 +684,8 @@ class IntersectionManager:
 		new_x = car.x		# Get the current x of the car
 		new_y = car.y		# Get the current y of the car
 		time_left = 0		# Indicates how much time is left if the car finishes the section without using the whole timestep
+		if car.x == end_x and car.y == end_y:
+			time_left = self.timestep
 		while time_left == 0:
 			# Get the new x and y values based on the velocity and acceleration of the car
 			new_x, new_y = self.__nextStraightPoint(new_x, new_y, velo, accel, delta_x, delta_y, self.timestep)
@@ -1073,12 +1114,26 @@ def main():
 	dMax = 148
 	dMin = 50
 	timestep = 0.1
-	policy = 0
+	policy = 3
 	IM = IntersectionManager(gsz, isz, dMax, dMin, timestep, policy)
 	# rospy.spin()
-	car1 = Car(1, 2, 0, dMax + 10, isz, 180, 15, 4, 2, 1, -1)
+	car1 = Car(1, 1, 0, dMax + 6, isz, 180, 15.0, 4, 2, 1, -1)
 	#car2 = Car(2, 10, 1, 0, dMax + 6, 90, 6, 4, 2, 1, -1)
 	success1, xs1, ys1, hs1, vs1, ts1 = IM.handle_car_request(car1)
+	time_2_stop = (dMax * 2) / car1.vel
+	accel = -car1.vel / time_2_stop
+	while not success1:
+		visualize(isz, dMax, dMin, [car1.x], [car1.y], 1, False)
+		car1.y = car1.y - ((0.5 * accel * timestep**2) + (car1.vel * timestep))
+		car1.vel = car1.vel + (accel * timestep)
+		if car1.vel <= 0:
+			car1.vel = 0
+			accel = 0
+			car1.y = isz - dMax
+		car1.t = car1.t + timestep
+		#print "Timestep: %s\nvelo: %s"%(car1.t, car1.vel)
+		success1, xs1, ys1, hs1, vs1, ts1 = IM.handle_car_request(car1)
+
 	#print(success1)
 	#print(xs1)
 	#print(ys1)
@@ -1105,11 +1160,13 @@ def main():
 		#success2, xs2, ys2, hs2, vs2, ts2 = IM.handle_car_request(car2)
 
 	for i in range(len(xs1)):
-		visualize(isz, dMax, dMin, xs1[i], ys1[i], 1)
+		visualize(isz, dMax, dMin, [xs1[i]], [ys1[i]], 1, False)
+
+	visualize(isz, dMax, dMin, xs1, ys1, 1, True)
 
 
-def visualize(isz, dMax, dMin, x, y, fignum):
-	fig = plt.figure(1)
+def visualize(isz, dMax, dMin, x, y, fignum=1, whole_path=True):
+	fig = plt.figure(fignum)
 	plt.cla()
 	# Plot outside boarders
 	plt.plot((0, isz), (0, 0), 'k')
@@ -1159,10 +1216,14 @@ def visualize(isz, dMax, dMin, x, y, fignum):
 	plt.plot((isz, isz - dMax), (dMax + 20, dMax + 20), '--y')
 
 	# Plot the points
-	plt.plot(x, y, '*r')
-	plt.pause(0.1)
-	
-	#plt.show()
+	if not whole_path:
+		plt.plot(x[0], y[0], '.r')
+		plt.pause(0.01)
+	else:
+		for i in range(len(x)):
+			plt.plot(x[i], y[i], '.r')
+		plt.show()
+
 
 if __name__ == '__main__':
 	main()
