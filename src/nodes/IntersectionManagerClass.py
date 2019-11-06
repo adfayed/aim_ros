@@ -3,9 +3,6 @@
 #from aim.srv import *
 import numpy as np
 import math
-import matplotlib
-matplotlib.use("TkAgg")
-import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 
 # Incase we need transformations
@@ -53,6 +50,9 @@ class IntersectionManager:
 		self.__dMin = dMin		# Distance after the intersection we stop worrying about a car
 		self.__timestep = timestep		# The amount of time to pass in one time step
 		self.__lane_q = [[], [], [], [], [], [], [], [], [], [], [], []]		# List to indicate which cars are first in the list
+		self.__phase = 0		# Used to determine what phase the traffic light policy is in
+		self.__time_to_change = 0		# Used to know when it is ok to change to a different phase in the traffic light policy
+		self.__conflict = False		# Used to determine if the phase needs to change
 		#self.service = rospy.Service('car_request', IntersectionManager, self.handle_car_request)
 
 	def handle_car_request(self, req):
@@ -94,7 +94,8 @@ class IntersectionManager:
 
 		# Check if the car is clear using the correct policy
 		if self.policy == 0:
-			success, xs, ys, headings, vs, ts = self.__ourPolicy(car, car.vel)
+			min_v = 10
+			success, xs, ys, headings, vs, ts = self.__detectCollisions(car, max(min_v,car.vel))
 		elif self.policy == 1:
 			success, xs, ys, headings, vs, ts = self.__dresnerStonePolicy(car)
 		# elif self.policy == 2:
@@ -120,7 +121,7 @@ class IntersectionManager:
 
 		return success, xs, ys, headings, vs, ts
 
-	def __ourPolicy(self, car, desired_velo):
+	def __detectCollisions(self, car, desired_velo):
 		"""
 		:param car = the car we will look at to see if the reservation can be accepted
 		:returns: A tuple representing the trajectory. 
@@ -553,13 +554,14 @@ class IntersectionManager:
 				  vs = list of velocities over the path
 				  ts = list of timesteps over the path
 		"""
-		success, xs, ys, headings, vs, ts = self.__ourPolicy(car, car.max_v)
+		min_v = 10
+		success, xs, ys, headings, vs, ts = self.__detectCollisions(car, car.max_v)
 		if not success:
-			success, xs, ys, headings, vs, ts = self.__ourPolicy(car, car.velo)
+			success, xs, ys, headings, vs, ts = self.__detectCollisions(car, max(min_v, car.vel))
 		return success, xs, ys, headings, vs, ts
 
 
-	def __trafficLightPolicy(self):
+	def __trafficLightPolicy(self, car):
 		"""
 		:param car = the car we will look at to see if the reservation can be accepted
 		:returns: A tuple representing the trajectory. 
@@ -570,7 +572,50 @@ class IntersectionManager:
 				  vs = list of velocities over the path
 				  ts = list of timesteps over the path
 		"""
-		pass
+		success = False
+		xs = []
+		ys = []
+		hs = []
+		vs = []
+		ts = []
+		if self.phase == 0:
+			lanes = [2, 8]
+			min_green_time = 2 * max(len(self.lane_q[2]), len(self.lane_q[8]))
+			max_green_time = 30
+		elif self.phase == 1:
+			lanes = [0, 1, 6, 7]
+			min_green_time = 5 + 2 * max(len(self.lane_q[0]), len(self.lane_q[1]), len(self.lane_q[6]), len(self.lane_q[7]))
+			max_green_time = 50
+		elif self.phase == 2:
+			lanes = [5, 11]
+			min_green_time = 2 * max(len(self.lane_q[5]), len(self.lane_q[11]))
+			max_green_time = 30
+		elif self.phase == 3:
+			lanes = [3, 4, 9, 10]
+			min_green_time = 5 + max(len(self.lane_q[3]), len(self.lane_q[4]), len(self.lane_q[9]), len(self.lane_q[10]))
+			max_green_time = 50
+		light_time = min(max_green_time, min_green_time)	# How long the light will stay green
+		# When a car enters dMax see if it is in the lanes that are green or not
+		# If it is, will it make it at the current velocity in the time before the light changes?
+		if car.lane_id in lanes:
+			# If there is no conflict we can schedule the car
+			if not self.conflict:
+				success, xs, ys, hs, vs, ts = self.__detectCollisions(car, car.vel)
+				# Determine when the car will be through the intersection
+				# Set this time to the time_to_change variable if it is later then the current time_to_change
+				return success, xs, ys, hs, vs, ts
+			# If there is a conflict we need to see if the car is going to make it in time
+
+		# If it isn't, raise conflict flag
+		else:
+			self.conflict = True
+			# If it isn't past time_to_change, reject the car
+			if car.t < self.time_to_change:
+				success = False
+				return success, xs, ys, hs, vs, ts
+		# If conflict and enough time has passed (light_time), change phase to the next phase that has a car waiting
+			# phase = (phase + 1) % 4
+
 
 	def __stopSignPolicy(self, car):
 		"""
@@ -615,8 +660,7 @@ class IntersectionManager:
 			return success, xs, ys, hs, vs, ts
 
 		# Check if the car is clear
-		return self.__ourPolicy(car, car.max_v)
-
+		return self.__detectCollisions(car, car.max_v)
 
 
 	def __createTrajectory(self, car, desired_velo):
@@ -1106,6 +1150,30 @@ class IntersectionManager:
 	def lane_q(self, value):
 		self.__lane_q = value
 
+	@property
+	def phase(self):
+		return self.__phase
+	
+	@phase.setter
+	def phase(self, value):
+		self.__phase = value
+
+	@property
+	def time_to_change(self):
+		return self.__time_to_change
+
+	@time_to_change.setter
+	def time_to_change(self, value):
+		self.__time_to_change = value
+
+	@property
+	def conflict(self):
+		return self.__conflict
+
+	@conflict.setter
+	def conflict(self, value):
+		self.__conflict = value
+	
 
 def main():
 	# rospy.init_node('intersection_manager_server')
@@ -1114,10 +1182,10 @@ def main():
 	dMax = 148
 	dMin = 50
 	timestep = 0.1
-	policy = 3
+	policy = 0
 	IM = IntersectionManager(gsz, isz, dMax, dMin, timestep, policy)
 	# rospy.spin()
-	car1 = Car(1, 1, 0, dMax + 6, isz, 180, 15.0, 4, 2, 1, -1)
+	car1 = Car(1, 2, 0, dMax + 10, isz, 180, 15.0, 4, 2, 1, -1)
 	#car2 = Car(2, 10, 1, 0, dMax + 6, 90, 6, 4, 2, 1, -1)
 	success1, xs1, ys1, hs1, vs1, ts1 = IM.handle_car_request(car1)
 	time_2_stop = (dMax * 2) / car1.vel
@@ -1133,31 +1201,6 @@ def main():
 		car1.t = car1.t + timestep
 		#print "Timestep: %s\nvelo: %s"%(car1.t, car1.vel)
 		success1, xs1, ys1, hs1, vs1, ts1 = IM.handle_car_request(car1)
-
-	#print(success1)
-	#print(xs1)
-	#print(ys1)
-	#print(hs1)
-	#print(vs1)
-	#print(ts1)
-	#success2, xs2, ys2, hs2, vs2, ts2 = IM.handle_car_request(car2)
-	#print(success2)
-	#old_x2 = []
-	#old_y2 = []
-	#old_h2 = []
-	#old_v2 = []
-	#old_t2 = []
-	#while not success2:
-		#print("trying again")
-		#old_x2.append(car2.x)
-		#old_y2.append(car2.y)
-		#old_h2.append(car2.heading)
-		#old_v2.append(car2.vel)
-		#old_t2.append(car2.t)
-		#car2.x = -0.5 * timestep**2 + car2.vel * timestep
-		#car2.vel = car2.vel - timestep
-		#car2.t = car2.t + timestep
-		#success2, xs2, ys2, hs2, vs2, ts2 = IM.handle_car_request(car2)
 
 	for i in range(len(xs1)):
 		visualize(isz, dMax, dMin, [xs1[i]], [ys1[i]], 1, False)
