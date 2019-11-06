@@ -1,6 +1,8 @@
 #!/usr/bin/env python  
 import rospy
 import numpy as np
+import math
+import pdb
 #from aim.srv import *
 
 # Class for each car's attr
@@ -32,29 +34,57 @@ class car:
 
 
 	def _update(self, time, follow_car = None):
-		# if self.lane_id == 0:
-		# elif self.lane_id == 1:
-		# elif self.lane_id == 2:
-		# elif self.lane_id == 3:
-		# elif self.lane_id == 4:
-		# elif self.lane_id == 5:
-		# elif self.lane_id == 6:
-		# elif self.lane_id == 7:
-		# elif self.lane_id == 8:
-		# elif self.lane_id == 9:
-		# elif self.lane_id == 10:
-		# elif self.lane_id == 11:
-		if follow_car is None:
-			
+		for i in range(0, len(self.t)):
+			if time == round(self.t[i],3):
+				curr_t_index = i
+				break
+		if self.reservation is True:
+			# Follow x, y, heading, vel
+			pass
 		else:
-
+			self.heading[curr_t_index] = self.heading[curr_t_index - 1]
+			if self.lane_id == 0 or self.lane_id == 1 or self.lane_id == 2:
+				# Position calculations for South lanes
+				self.y[curr_t_index] = self.y[curr_t_index - 1] + self.vel[curr_t_index - 1]*timestep_size
+				self.x[curr_t_index] = self.x[curr_t_index - 1]
+				braking_slope = self.vel[curr_t_index - 1]/((dMax - self.y[curr_t_index - 1])/self.vel[curr_t_index - 1])
+			elif self.lane_id == 3 or self.lane_id == 4 or self.lane_id == 5:
+				# Position calculations for East lanes
+				self.y[curr_t_index] = self.y[curr_t_index - 1]
+				self.x[curr_t_index] = self.x[curr_t_index - 1] - self.vel[curr_t_index - 1]*timestep_size
+				braking_slope = self.vel[curr_t_index - 1]/((self.x[curr_t_index - 1] - dMax+6*lane_width)/self.vel[curr_t_index - 1])
+			elif self.lane_id == 6 or self.lane_id == 7 or self.lane_id == 8:
+				# Position calculations for North lanes
+				self.x[curr_t_index] = self.x[curr_t_index - 1]
+				self.y[curr_t_index] = self.y[curr_t_index - 1] - self.vel[curr_t_index - 1]*timestep_size
+				braking_slope = self.vel[curr_t_index - 1]/((self.y[curr_t_index - 1] - dMax+6*lane_width)/self.vel[curr_t_index - 1])
+			elif self.lane_id == 9 or self.lane_id == 10 or self.lane_id == 11:
+				# Position calculations for West lanes
+				self.x[curr_t_index] = self.x[curr_t_index - 1] + self.vel[curr_t_index - 1]*timestep_size
+				self.y[curr_t_index] = self.y[curr_t_index - 1]
+				braking_slope = self.vel[curr_t_index - 1]/((dMax - self.x[curr_t_index - 1])/self.vel[curr_t_index - 1])
+			new_speed_lead = self.vel[curr_t_index - 1] - braking_slope*timestep_size
+			if follow_car is None:
+				new_speed = new_speed_lead
+			else:
+				eucl_d = math.sqrt((follow_car.x[curr_t_index] - self.x[curr_t_index])**2 + (follow_car.y[curr_t_index] - self.y[curr_t_index])**2)
+				new_speed_follow = follow_car.vel[curr_t_index] + ((eucl_d - dSafe)*timestep_size)
+				if follow_car.reservation is True:
+					# Take Minimums	
+					new_speed = min(new_speed_follow, new_speed_lead)
+				else:
+					# Stop behind follow_car by dSafe
+					new_speed = new_speed_follow
+			if new_speed < 0:
+				self.vel[curr_t_index] = 0
+			else:
+				self.vel[curr_t_index] = new_speed
 		return self
 
 
 class carManager:
 	def __init__(self, car_list = []):
 		self.car_list = car_list
-		self.reserved_cars
 
 	def sendRequests(self, time):
 		for car in self.car_list:
@@ -62,14 +92,17 @@ class carManager:
 				car.reservation = car_request_client(car.car_id, car.lane_id, car.t, 
 					car.x, car.y, car.heading, car.angular_V, car.vel, car.acc, car.priority, car.length, car.width, car.max_V, car.max_A, car.min_A, car.max_lateral_g)
 
-	def update(self, time, timestep_size):
-		for i in len(self.car_list):
-			follow_car = None
-			if self.car_list[i].t[0] <= time+timestep_size:
+	def update(self, time):
+		for i in range(0,len(self.car_list)):
+			if round(self.car_list[i].t[1],3) <= time:
+				follow_car = None
 				for j in range(i-1, 0, -1):
 					if self.car_list[j].lane_id is self.car_list[i].lane_id:
 						follow_car = self.car_list[j]
-			self.car_list[i] = self.car_list[i]._update(time, follow_car)
+						break
+				self.car_list[i] = self.car_list[i]._update(time, follow_car)
+			else:
+				break
 
 
 # This is the client's fuction sending a car's info to the server (intersectionManager.py service) as a request to pass
@@ -102,8 +135,9 @@ def match_spawn_count(num_cars, timestep_size, tSafe, time_to_complete, end_time
 				print ("Not enough free lanes, the rest of the needed cars will attempt to spawn next timestep.")
 			rand_car_lanes = np.random.choice(free_lanes, new_spawns, replace=False)
 			for lane in rand_car_lanes:
-				x, y, heading = init_state(t, end_time, lane)
-				cars_spawned.append(car(car_id, lane, np.arange(t, end_time + timestep_size, timestep_size), x, y, heading, 0, (spawn_vel_range[1] - spawn_vel_range[0])*np.random.random_sample() + spawn_vel_range[0], 0))
+				x, y, heading, vel = init_state(t, end_time, lane)
+				vel[0] = (spawn_vel_range[1] - spawn_vel_range[0])*np.random.random_sample() + spawn_vel_range[0]
+				cars_spawned.append(car(car_id, lane, np.arange(t, end_time + timestep_size, timestep_size), x, y, heading, 0, vel, 0))
 				car_id = car_id + 1
 	return cars_spawned
 
@@ -122,25 +156,27 @@ def init_state(t, end_time, lane):
 	x = np.arange(t, end_time + timestep_size, timestep_size)
 	y = np.arange(t, end_time + timestep_size, timestep_size)
 	h = np.arange(t, end_time + timestep_size, timestep_size)
+	vel = np.arange(t, end_time + timestep_size, timestep_size)
 	x[0] = x_states[lane]
 	y[0] = y_states[lane]
 	h[0] = h_states[lane]
-	return x, y, h
+	return x, y, h, vel
 
 
 
 def main():
 	# ----------------------------- Sim configurations ------------------------------
 	np.random.seed(0)
+	global x_states, y_states, h_states, timestep_size, num_cars, tSafe, time_to_complete, end_time, dMax, dSafe, lane_width
 	timestep_size = 0.1 # Must be a float
-	num_cars = 500.0 # Must be a float
+	num_cars = 10.0 # Must be a float
 	tSafe = 1.0 # Must be a float
-	time_to_complete = 500.0 # Must be a float
-	end_time = 1000.0 # Must be a float
+	time_to_complete = 50.0 # Must be a float
+	end_time = 100.0 # Must be a float
 	cars_spawned = []
 	dMax = 148 
+	dSafe = 2
 	lane_width = 3.66 
-	global x_states, y_states, h_states
 	x_states = {0: dMax+3.5*lane_width,
 	 1:dMax+4.5*lane_width,
 	 2:dMax+5.5*lane_width,
@@ -184,23 +220,26 @@ def main():
 
 	cars_spawned = match_spawn_count(num_cars, timestep_size, tSafe, time_to_complete, end_time, cars_spawned)
 	cm = carManager(cars_spawned)
-	rospy.init_node('car_manager')
-	rate = rospy.Rate(100.0)
+	pdb.set_trace()
+	for time in np.arange(0, end_time + timestep_size, timestep_size):
+		time = round(time,3)
+		cm.update(time)
+	pdb.set_trace()
+	#rospy.init_node('car_manager')
+	#rate = rospy.Rate(100.0)
 
-	while not rospy.is_shutdown():
-		global time
-		print ("Car Manager is initializing...")
-		cm.initialize()
-		print ("Starting simulation.")
-		for time in np.arange(0, end_time + timestep_size, timestep_size):
-			cm.update(time)
-			response = cm.sendRequests(time)
+	#while not rospy.is_shutdown():
+		#global time
+		#print ("Starting simulation.")
+		#for time in np.arange(0, end_time + timestep_size, timestep_size):
+			#cm.update(time)
+			#response = cm.sendRequests(time)
 			
 			#if response is not None:
 			#	cm.update(time)
 	# 	   # Clean reserved and write to csv
 	# 	   # Update car's and increment t
-	 	rate.sleep()
+		#rate.sleep()
 
 if __name__ == '__main__':
 	main()
