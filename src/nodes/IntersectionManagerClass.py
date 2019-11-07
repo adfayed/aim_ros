@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 
 class Car:
 
-	def __init__(self, car_id, lane_id, t, x, y, h, v, l, w, max_a, min_a):
+	def __init__(self, car_id, lane_id, t, x, y, h, v, desired_v, l, w, max_a, min_a):
 		self.car_id = car_id
 		self.lane_id = lane_id
 		self.t = t
@@ -21,6 +21,7 @@ class Car:
 		self.y = y
 		self.heading = h
 		self.vel = v
+		self.desired_velo = desired_v
 		self.max_v = 20
 		self.width = w
 		self.length = l
@@ -95,7 +96,8 @@ class IntersectionManager:
 		# Check if the car is clear using the correct policy
 		if self.policy == 0:
 			min_v = 10
-			success, xs, ys, headings, vs, ts = self.__detectCollisions(car, max(min_v,car.vel))
+			# success, xs, ys, headings, vs, ts = self.__detectCollisions(car, max(min_v,car.vel))
+			success, xs, ys, headings, vs, ts = self.__detectCollisions(car, car.desired_velo)
 		elif self.policy == 1:
 			success, xs, ys, headings, vs, ts = self.__dresnerStonePolicy(car)
 		# elif self.policy == 2:
@@ -757,6 +759,7 @@ class IntersectionManager:
 				hs.append(heading)
 				vs.append(velo)
 				t += self.timestep
+				t = np.around(t, decimals=10)
 				ts.append(t)
 
 		####################### Section 2: Intersection path (Turn Left, Straight, Turn Right ##########################
@@ -803,6 +806,7 @@ class IntersectionManager:
 			hs.append(new_h)
 			vs.append(velo)
 			t += self.timestep
+			t = np.around(t, decimals=10)
 			ts.append(t)
 			time_left = 0
 
@@ -831,6 +835,7 @@ class IntersectionManager:
 					hs.append(new_h)
 					vs.append(velo)
 					t += self.timestep
+					t = np.around(t, decimals=10)
 					ts.append(t)
 
 		elif lane == 1:		# Going straight
@@ -875,6 +880,7 @@ class IntersectionManager:
 			hs.append(heading)
 			vs.append(velo)
 			t += self.timestep
+			t = np.around(t, decimals=10)
 			ts.append(t)
 			time_left = 0
 
@@ -899,6 +905,7 @@ class IntersectionManager:
 					hs.append(heading)
 					vs.append(velo)
 					t += self.timestep
+					t = np.around(t, decimals=10)
 					ts.append(t)
 
 		elif lane == 2:		# Turning Left
@@ -943,6 +950,7 @@ class IntersectionManager:
 			hs.append(new_h)
 			vs.append(velo)
 			t += self.timestep
+			t = np.around(t, decimals=10)
 			ts.append(t)
 			time_left = 0
 
@@ -967,6 +975,7 @@ class IntersectionManager:
 					hs.append(new_h)
 					vs.append(velo)
 					t += self.timestep
+					t = np.around(t, decimals=10)
 					ts.append(t)
 
 		####################### Section 3: Go straight until dMin ##########################
@@ -1011,6 +1020,7 @@ class IntersectionManager:
 		hs.append(heading)
 		vs.append(velo)
 		t += self.timestep
+		t = np.around(t, decimals=10)
 		ts.append(t)
 
 		# Continue until the car reaches a point at the goal
@@ -1024,6 +1034,7 @@ class IntersectionManager:
 			hs.append(heading)
 			vs.append(velo)
 			t += self.timestep
+			t = np.around(t, decimals=10)
 			ts.append(t)
 			if (increasing and new_x > end_x) or (not increasing and new_x < end_x):
 				break
@@ -1178,37 +1189,131 @@ class IntersectionManager:
 def main():
 	# rospy.init_node('intersection_manager_server')
 	gsz = 1
-	isz = 320
-	dMax = 148
-	dMin = 50
+	isz = 74	#320
+	dMax = 25	#148
+	dMin = 12	#50
 	timestep = 0.1
-	policy = 3
+	policy = 0
 	IM = IntersectionManager(gsz, isz, dMax, dMin, timestep, policy)
 	# rospy.spin()
-	car1 = Car(1, 2, 0, dMax + 10, isz, 180, 15.0, 4, 2, 1, -1)
-	#car2 = Car(2, 10, 1, 0, dMax + 6, 90, 6, 4, 2, 1, -1)
+	car1 = Car(1, 1, 0.0, dMax + 6, isz, 180, 5.0, 5.0, 4, 2, 1, -1)
+	car2 = Car(2, 10, 0.8, 0, dMax + 6, 90, 5.0, 5.0, 4, 2, 1, -1)
 	success1, xs1, ys1, hs1, vs1, ts1 = IM.handle_car_request(car1)
-	time_2_stop = (dMax * 2) / car1.vel
-	accel = -car1.vel / time_2_stop
-	while not success1:
-		visualize(isz, dMax, dMin, [car1.x], [car1.y], [car1.heading], car1, 1, False)
-		car1.y = car1.y - ((0.5 * accel * timestep**2) + (car1.vel * timestep))
-		car1.vel = car1.vel + (accel * timestep)
-		if car1.vel <= 0:
-			car1.vel = 0
-			accel = 0
-			car1.y = isz - dMax
-		car1.t = car1.t + timestep
-		#print "Timestep: %s\nvelo: %s"%(car1.t, car1.vel)
-		success1, xs1, ys1, hs1, vs1, ts1 = IM.handle_car_request(car1)
+	success2, xs2, ys2, hs2, vs2, ts2 = IM.handle_car_request(car2)
+	time_2_stop1 = (dMax * 2) / car1.vel
+	accel1 = -car1.vel / time_2_stop1
+	time_2_stop2 = (dMax * 2) / car2.vel
+	accel2 = -car2.vel / time_2_stop2
+	actual_x1 = []
+	actual_y1 = []
+	actual_h1 = []
+	actual_v1 = []
+	actual_t1 = []
+	actual_x2 = []
+	actual_y2 = []
+	actual_h2 = []
+	actual_v2 = []
+	actual_t2 = []
+	while True:
+		if not success1:
+			actual_x1.append(car1.x)
+			actual_y1.append(car1.y)
+			actual_h1.append(car1.heading)
+			actual_v1.append(car1.vel)
+			actual_t1.append(car1.t)
+			car1.y = car1.y - ((0.5 * accel1 * timestep**2) + (car1.vel * timestep))
+			car1.vel = car1.vel + (accel1 * timestep)
+			if car1.vel <= 0:
+				car1.vel = 0
+				accel1 = 0
+				car1.y = isz - dMax
+			car1.t = np.around(car1.t + timestep, decimals=10)
+			#print "Timestep: %s\nvelo: %s"%(car1.t, car1.vel)
+			success1, xs1, ys1, hs1, vs1, ts1 = IM.handle_car_request(car1)
+		if not success2:
+			#visualize(isz, dMax, dMin, [car2.x], [car2.y], [car2.heading], [car2], 1, False)
+			actual_x2.append(car2.x)
+			actual_y2.append(car2.y)
+			actual_h2.append(car2.heading)
+			actual_v2.append(car2.vel)
+			actual_t2.append(car2.t)
+			car2.x = car2.x + ((0.5 * accel2 * timestep**2) + (car2.vel * timestep))
+			car2.vel = car2.vel + (accel2 * timestep)
+			if car2.vel <= 0:
+				car2.vel = 0
+				accel2 = 0
+				car2.x = dMax
+			car2.t = np.around(car2.t + timestep, decimals=10)
+			#print "Timestep: %s\nvelo: %s"%(car1.t, car1.vel)
+			success2, xs2, ys2, hs2, vs2, ts2 = IM.handle_car_request(car2)
+		if success1 and success2:
+			break
 
 	for i in range(len(xs1)):
-		visualize(isz, dMax, dMin, [xs1[i]], [ys1[i]], [hs1[i]], car1, 1, False)
+		actual_x1.append(xs1[i])
+		actual_y1.append(ys1[i])
+		actual_h1.append(hs1[i])
+		actual_v1.append(vs1[i])
+		actual_t1.append(ts1[i])
+	for i in range(len(xs2)):
+		actual_x2.append(xs2[i])
+		actual_y2.append(ys2[i])
+		actual_h2.append(hs2[i])
+		actual_v2.append(vs2[i])
+		actual_t2.append(ts2[i])
+	for t in range(len(actual_t1)):
+		actual_t1[t] = np.around(actual_t1[t], decimals=5)
+	for t in range(len(actual_t2)):
+		actual_t2[t] = np.around(actual_t2[t], decimals=5)
 
-	visualize(isz, dMax, dMin, xs1, ys1, car1, 1, True)
+	time = 0.0
+	car1pointer = 0
+	car2pointer = 0
+	while True:
+		x2print = []
+		y2print = []
+		h2print = []
+		v2print = []
+		car2print = []
+		colors = []
+		if car1pointer < len(actual_t1) and actual_t1[car1pointer] == time:
+			x2print.append(actual_x1[car1pointer])
+			y2print.append(actual_y1[car1pointer])
+			h2print.append(actual_h1[car1pointer])
+			v2print.append(actual_v1[car1pointer])
+			car2print.append(car1)
+			colors.append('-r')
+			car1pointer += 1
+		if car2pointer < len(actual_t2) and actual_t2[car2pointer] == time:
+			x2print.append(actual_x2[car2pointer])
+			y2print.append(actual_y2[car2pointer])
+			h2print.append(actual_h2[car2pointer])
+			v2print.append(actual_v2[car2pointer])
+			car2print.append(car2)
+			colors.append('-b')
+			car2pointer += 1
+		visualize(isz, dMax, dMin, x2print, y2print, h2print, v2print, car2print, colors, 1, False)
+		time += 0.1
+		time = np.around(time, decimals=5)
+		if car1pointer >= len(actual_t1) and car2pointer >= len(actual_t2):
+			break
+
+	# x2print = []
+	# y2print = []
+	# h2print = []
+	# for i in range(len(actual_x1)):
+	# 	x2print.append(actual_x1[i])
+	# 	y2print.append(actual_y1[i])
+	# 	h2print.append(actual_h1[i])
+	# for i in range(len(actual_x2)):
+	# 	x2print.append(actual_x2[i])
+	# 	y2print.append(actual_y2[i])
+	# 	h2print.append(actual_h2[i])
+	# visualize(isz, dMax, dMin, x2print, y2print, h2print, [car1, car2], [], 1, True)
+	# visualize(isz, dMax, dMin, actual_x2, actual_y2, car2, 1, True)
 
 
-def visualize(isz, dMax, dMin, x, y, h, car, fignum=1, whole_path=True):
+def visualize(isz, dMax, dMin, x, y, h, v, car, colors, fignum=1, whole_path=True):
 	fig = plt.figure(fignum)
 	plt.cla()
 	# Plot outside boarders
@@ -1260,15 +1365,19 @@ def visualize(isz, dMax, dMin, x, y, h, car, fignum=1, whole_path=True):
 
 	# Plot the points
 	if not whole_path:
-		#plt.plot(x[0], y[0], '.r')
-		box = calculateBox(car, [x[0]], [y[0]], [h[0]])
-		plt.plot((box[0][0][0], box[1][0][0], box[3][0][0], box[2][0][0], box[0][0][0]),
-			 (box[0][1][0], box[1][1][0], box[3][1][0], box[2][1][0], box[0][1][0]),
-			 '-r')
+		boxes = []
+		for i in range(len(car)):
+			boxes.append(calculateBox(car[i], [x[i]], [y[i]], [h[i]]))
+			plt.annotate(v[i], xy=(x[i], y[i]), xytext=(x[i] - 15, y[i] + 15),
+						 arrowprops=dict(facecolor='black', shrink=0.01))
+		for b in range(len(boxes)):
+			plt.plot((boxes[b][0][0][0], boxes[b][1][0][0], boxes[b][3][0][0], boxes[b][2][0][0], boxes[b][0][0][0]),
+					 (boxes[b][0][1][0], boxes[b][1][1][0], boxes[b][3][1][0], boxes[b][2][1][0], boxes[b][0][1][0]),
+					 colors[b])
 		plt.pause(0.01)
 	else:
 		for i in range(len(x)):
-			plt.plot(x[i], y[i], '.r')
+			plt.plot(x[i], y[i], '-r')
 		plt.show()
 
 
