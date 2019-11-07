@@ -1182,7 +1182,7 @@ def main():
 	dMax = 148
 	dMin = 50
 	timestep = 0.1
-	policy = 0
+	policy = 3
 	IM = IntersectionManager(gsz, isz, dMax, dMin, timestep, policy)
 	# rospy.spin()
 	car1 = Car(1, 2, 0, dMax + 10, isz, 180, 15.0, 4, 2, 1, -1)
@@ -1191,7 +1191,7 @@ def main():
 	time_2_stop = (dMax * 2) / car1.vel
 	accel = -car1.vel / time_2_stop
 	while not success1:
-		visualize(isz, dMax, dMin, [car1.x], [car1.y], 1, False)
+		visualize(isz, dMax, dMin, [car1.x], [car1.y], [car1.heading], car1, 1, False)
 		car1.y = car1.y - ((0.5 * accel * timestep**2) + (car1.vel * timestep))
 		car1.vel = car1.vel + (accel * timestep)
 		if car1.vel <= 0:
@@ -1203,12 +1203,12 @@ def main():
 		success1, xs1, ys1, hs1, vs1, ts1 = IM.handle_car_request(car1)
 
 	for i in range(len(xs1)):
-		visualize(isz, dMax, dMin, [xs1[i]], [ys1[i]], 1, False)
+		visualize(isz, dMax, dMin, [xs1[i]], [ys1[i]], [hs1[i]], car1, 1, False)
 
-	visualize(isz, dMax, dMin, xs1, ys1, 1, True)
+	visualize(isz, dMax, dMin, xs1, ys1, car1, 1, True)
 
 
-def visualize(isz, dMax, dMin, x, y, fignum=1, whole_path=True):
+def visualize(isz, dMax, dMin, x, y, h, car, fignum=1, whole_path=True):
 	fig = plt.figure(fignum)
 	plt.cla()
 	# Plot outside boarders
@@ -1260,12 +1260,43 @@ def visualize(isz, dMax, dMin, x, y, fignum=1, whole_path=True):
 
 	# Plot the points
 	if not whole_path:
-		plt.plot(x[0], y[0], '.r')
+		#plt.plot(x[0], y[0], '.r')
+		box = calculateBox(car, [x[0]], [y[0]], [h[0]])
+		plt.plot((box[0][0][0], box[1][0][0], box[3][0][0], box[2][0][0], box[0][0][0]),
+			 (box[0][1][0], box[1][1][0], box[3][1][0], box[2][1][0], box[0][1][0]),
+			 '-r')
 		plt.pause(0.01)
 	else:
 		for i in range(len(x)):
 			plt.plot(x[i], y[i], '.r')
 		plt.show()
+
+
+def calculateBox(car, xs, ys, hs):
+	# Calculate the initial bounding box
+		box = np.array([[[xs[0] - (car.width / 2)],
+						 [ys[0]],
+						 [1]],
+						[[xs[0] + (car.width / 2)],
+						 [ys[0]],
+						 [1]],
+						[[xs[0] - (car.width / 2)],
+						 [ys[0] - car.length],
+						 [1]],
+						[[xs[0] + (car.width / 2)],
+						 [ys[0] - car.length],
+						 [1]]])
+		# Rotate so heading in correct direction
+		T = np.array([[1, 0, -xs[0]],
+					  [0, 1, -ys[0]],
+					  [0, 0, 1]])
+		R = np.array([[np.cos(np.radians(-hs[0])), -np.sin(np.radians(-hs[0])), 0],
+					  [np.sin(np.radians(-hs[0])), np.cos(np.radians(-hs[0])), 0],
+					  [0, 0, 1]])
+		R = np.around(R, decimals=10)
+		for b in range(4):
+			box[b] = np.dot(np.dot(np.dot(np.linalg.inv(T), R), T), box[b])
+		return box
 
 
 if __name__ == '__main__':
