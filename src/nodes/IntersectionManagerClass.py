@@ -100,8 +100,8 @@ class IntersectionManager:
 			success, xs, ys, headings, vs, ts = self.__detectCollisions(car, car.desired_velo)
 		elif self.policy == 1:
 			success, xs, ys, headings, vs, ts = self.__dresnerStonePolicy(car)
-		# elif self.policy == 2:
-			# success, xs, ys, headings, vs, ts = self.__trafficLightPolicy(car)
+		elif self.policy == 2:
+			success, xs, ys, headings, vs, ts = self.__trafficLightPolicy(car)
 		elif self.policy == 3:
 			success, xs, ys, headings, vs, ts = self.__stopSignPolicy(car)
 		else:
@@ -562,7 +562,6 @@ class IntersectionManager:
 			success, xs, ys, headings, vs, ts = self.__detectCollisions(car, max(min_v, car.vel))
 		return success, xs, ys, headings, vs, ts
 
-
 	def __trafficLightPolicy(self, car):
 		"""
 		:param car = the car we will look at to see if the reservation can be accepted
@@ -596,28 +595,97 @@ class IntersectionManager:
 			lanes = [3, 4, 9, 10]
 			min_green_time = 5 + max(len(self.lane_q[3]), len(self.lane_q[4]), len(self.lane_q[9]), len(self.lane_q[10]))
 			max_green_time = 50
-		light_time = min(max_green_time, min_green_time)	# How long the light will stay green
-		# When a car enters dMax see if it is in the lanes that are green or not
-		# If it is, will it make it at the current velocity in the time before the light changes?
-		if car.lane_id in lanes:
-			# If there is no conflict we can schedule the car
-			if not self.conflict:
-				success, xs, ys, hs, vs, ts = self.__detectCollisions(car, car.vel)
-				# Determine when the car will be through the intersection
-				# Set this time to the time_to_change variable if it is later then the current time_to_change
-				return success, xs, ys, hs, vs, ts
-			# If there is a conflict we need to see if the car is going to make it in time
-
-		# If it isn't, raise conflict flag
 		else:
-			self.conflict = True
-			# If it isn't past time_to_change, reject the car
-			if car.t < self.time_to_change:
-				success = False
+			lanes = []
+			min_green_time = 0
+			max_green_time = 0
+		# When car requests:
+		if car.lane_id in lanes:		# Car is in the lane that is green
+			if not self.conflict:		# No conflict so check the request
+				success, xs, ys, hs, vs, ts = self.__detectCollisions(car, car.desired_velo)
+				self.time_to_change = max(self.time_to_change, self.__getExitTime(car))
+				if success:
+					exit_time = self.__getExitTime(car)
+					self.time_to_change = max(self.time_to_change, exit_time)
+				return success. xs. ys, hs, vs, ts
+			else:		# Conflict so see if the car can still make it through
+				exit_time = self.__getExitTime(car)
+				if exit_time > self.time_to_change:		# The car cannot make it through the intersection
+					return success, xs, ys, hs, vs, ts
+				else:
+					success, xs, ys, hs, vs, ts = self.__detectCollisions(car, car.desired_velo)
+					return success, xs, ys, hs, vs, ts
+		else:		# Car is not in the lane that is green
+			if car.t >= self.time_to_change:		# It is past the time to change the light
+				# Change the phase to the first phase that has a car waiting/coming
+				while True:
+					self.phase = (self.phase + 1) % 4
+					if self.phase == 0:
+						lanes = [2, 8]
+						min_green_time = 2 * max(len(self.lane_q[2]), len(self.lane_q[8]))
+						max_green_time = 30
+					elif self.phase == 1:
+						lanes = [0, 1, 6, 7]
+						min_green_time = 5 + 2 * max(len(self.lane_q[0]), len(self.lane_q[1]), len(self.lane_q[6]),
+													 len(self.lane_q[7]))
+						max_green_time = 50
+					elif self.phase == 2:
+						lanes = [5, 11]
+						min_green_time = 2 * max(len(self.lane_q[5]), len(self.lane_q[11]))
+						max_green_time = 30
+					elif self.phase == 3:
+						lanes = [3, 4, 9, 10]
+						min_green_time = 5 + max(len(self.lane_q[3]), len(self.lane_q[4]), len(self.lane_q[9]),
+												 len(self.lane_q[10]))
+						max_green_time = 50
+					else:
+						lanes = []
+						min_green_time = 0
+						max_green_time = 0
+					# If there are cars waiting then min_green_time will not be 0 so set to this phase
+					if min_green_time != 0 or car.lane_id in lanes:
+						break
+				self.time_to_change = car.t + min(min_green_time, max_green_time)
+				if car.lane_id in lanes:		# The car is in the lane that is green
+					success, xs, ys, hs, vs, ts = self.__detectCollisions(car, car.desired_velo)
+					self.conflict = False
+					self.time_to_change = max(self.time_to_change, self.__getExitTime(car))
+					if success:
+						exit_time = self.__getExitTime(car)
+						self.time_to_change = max(self.time_to_change, exit_time)
+					return success, xs, ys, hs, vs, ts
+				else:		# The car is not in the lane that is green so set conflict flag and reject request
+					self.conflict = True
+					return success, xs, ys, hs, vs, ts
+			else:
+				self.conflict = True
 				return success, xs, ys, hs, vs, ts
-		# If conflict and enough time has passed (light_time), change phase to the next phase that has a car waiting
-			# phase = (phase + 1) % 4
 
+	def __getExitTime(self, car):
+		lane = car.lane_id % 3
+		# Calculate how far the car needs to travel
+		travel_distance = car.length
+		big_radius = 3.5 * self.lane_width
+		small_radius = 0.5 * self.lane_width
+		if lane == 0:
+			travel_distance += 0.5 * np.pi * small_radius
+		elif lane == 1:
+			travel_distance += self.num_lanes * self.lane_width
+		elif lane == 2:
+			travel_distance += 0.5 * np.pi * big_radius
+		if car.heading == 0:
+			travel_distance += self.dMax - car.y
+		elif car.heading == 90:
+			travel_distance += self.dMax - car.x
+		elif car.heading == 180:
+			travel_distance += self.dMax - (self.intersection_size - car.y)
+		elif car.heading == 270:
+			travel_distance += self.dMax - (self.intersection_size - car.x)
+
+		# Calculate how long it will take to travel
+		time = (travel_distance * 2) / (car.desired_velo + car.vel)
+		exit_time = car.t + time
+		return exit_time
 
 	def __stopSignPolicy(self, car):
 		"""
