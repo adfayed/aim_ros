@@ -5,8 +5,8 @@ float64 x
 float64 y
 float32 heading
 float32 angular_V
-float32 vel
-float32 acc
+float64 vel
+float64 acc
 uint8 priority
 float32 length
 float32 width
@@ -15,4 +15,9 @@ float32 max_A
 float32 min_A
 float32 max_lateral_g
 ---
+float64[] x
+float64[] y
+float64[] heading
+float64[] vel
+float64[] acc
 bool success

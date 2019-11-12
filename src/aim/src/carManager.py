@@ -43,42 +43,49 @@ class car:
 			pass
 		else:
 			self.heading[curr_t_index] = self.heading[curr_t_index - 1]
+			#braking_slope = self.vel[curr_t_index - 1]/((dMax - self.x[curr_t_index - 1])/self.vel[curr_t_index - 1])
 			if self.lane_id == 0 or self.lane_id == 1 or self.lane_id == 2:
 				# Position calculations for South lanes
-				self.y[curr_t_index] = self.y[curr_t_index - 1] + self.vel[curr_t_index - 1]*timestep_size
+				self.y[curr_t_index] = self.y[curr_t_index - 1] - (0.5*self.acc[curr_t_index - 1]*(timestep_size**2)) + self.vel[curr_t_index - 1]*timestep_size
 				self.x[curr_t_index] = self.x[curr_t_index - 1]
-				braking_slope = self.vel[curr_t_index - 1]/((dMax - self.y[curr_t_index - 1])/self.vel[curr_t_index - 1])
 			elif self.lane_id == 3 or self.lane_id == 4 or self.lane_id == 5:
 				# Position calculations for East lanes
 				self.y[curr_t_index] = self.y[curr_t_index - 1]
-				self.x[curr_t_index] = self.x[curr_t_index - 1] - self.vel[curr_t_index - 1]*timestep_size
-				braking_slope = self.vel[curr_t_index - 1]/((self.x[curr_t_index - 1] - dMax+6*lane_width)/self.vel[curr_t_index - 1])
+				self.x[curr_t_index] = self.x[curr_t_index - 1] + (0.5*self.acc[curr_t_index - 1]*(timestep_size**2)) - self.vel[curr_t_index - 1]*timestep_size
 			elif self.lane_id == 6 or self.lane_id == 7 or self.lane_id == 8:
 				# Position calculations for North lanes
 				self.x[curr_t_index] = self.x[curr_t_index - 1]
-				self.y[curr_t_index] = self.y[curr_t_index - 1] - self.vel[curr_t_index - 1]*timestep_size
-				braking_slope = self.vel[curr_t_index - 1]/((self.y[curr_t_index - 1] - dMax+6*lane_width)/self.vel[curr_t_index - 1])
+				self.y[curr_t_index] = self.y[curr_t_index - 1] + (0.5*self.acc[curr_t_index - 1]*(timestep_size**2)) - self.vel[curr_t_index - 1]*timestep_size
 			elif self.lane_id == 9 or self.lane_id == 10 or self.lane_id == 11:
 				# Position calculations for West lanes
-				self.x[curr_t_index] = self.x[curr_t_index - 1] + self.vel[curr_t_index - 1]*timestep_size
+				self.x[curr_t_index] = self.x[curr_t_index - 1] - (0.5*self.acc[curr_t_index - 1]*(timestep_size**2)) + self.vel[curr_t_index - 1]*timestep_size
 				self.y[curr_t_index] = self.y[curr_t_index - 1]
-				braking_slope = self.vel[curr_t_index - 1]/((dMax - self.x[curr_t_index - 1])/self.vel[curr_t_index - 1])
-			new_speed_lead = self.vel[curr_t_index - 1] - braking_slope*timestep_size
+			new_speed_lead = self.vel[curr_t_index - 1] + self.acc[curr_t_index - 1]*timestep_size
 			if follow_car is None:
 				new_speed = new_speed_lead
+				self.acc[curr_t_index] = (-self.vel[0] / (2*dMax/self.vel[0]))
 			else:
-				eucl_d = math.sqrt((follow_car.x[curr_t_index] - self.x[curr_t_index])**2 + (follow_car.y[curr_t_index] - self.y[curr_t_index])**2)
-				new_speed_follow = follow_car.vel[curr_t_index] + ((eucl_d - dSafe)*timestep_size)
+				for i in range(0, len(follow_car.t)):
+					if time == round(follow_car.t[i],3):
+						f_curr_t_index = i
+						break
+				car_gap = (follow_car.x[f_curr_t_index] - self.x[curr_t_index]) + (follow_car.y[f_curr_t_index] - self.y[curr_t_index])
+				#new_speed_follow = follow_car.vel[f_curr_t_index] + ((car_gap - dSafe)*timestep_size)
+				#self.acc[curr_t_index] = (follow_car.vel[f_curr_t_index - 1]**2 - self.vel[curr_t_index - 1]**2)/2*(car_gap - dSafe)
+				self.acc[curr_t_index] = (follow_car.vel[f_curr_t_index - 1] - self.vel[curr_t_index - 1])/(2*(car_gap - dSafe)/self.vel[curr_t_index - 1])
+				new_speed_follow = self.vel[curr_t_index - 1] + self.acc[curr_t_index - 1]*timestep_size
 				if follow_car.reservation is True:
 					# Take Minimums	
 					new_speed = min(new_speed_follow, new_speed_lead)
+					#self.acc[curr_t_index] = min(self.acc[curr_t_index], follow_car.acc[f_curr_t_index])
 				else:
 					# Stop behind follow_car by dSafe
 					new_speed = new_speed_follow
-			if new_speed < 0:
+					#self.acc[curr_t_index] = min(self.acc[curr_t_index], follow_car.acc[f_curr_t_index])
+			self.vel[curr_t_index] = new_speed
+			if new_speed <= 3:
 				self.vel[curr_t_index] = 0
-			else:
-				self.vel[curr_t_index] = new_speed
+				self.acc[curr_t_index] = 0
 		return self
 
 
@@ -96,8 +103,8 @@ class carManager:
 		for i in range(0,len(self.car_list)):
 			if round(self.car_list[i].t[1],3) <= time:
 				follow_car = None
-				for j in range(i-1, 0, -1):
-					if self.car_list[j].lane_id is self.car_list[i].lane_id:
+				for j in range(i-1, -1, -1):
+					if self.car_list[j].lane_id == self.car_list[i].lane_id:
 						follow_car = self.car_list[j]
 						break
 				self.car_list[i] = self.car_list[i]._update(time, follow_car)
@@ -119,7 +126,7 @@ def car_request_client(car_id, lane_id, t, x, y, heading, angular_V, vel, acc, p
 		return False
 
 #-------------------- Functions for generating cars ---------------------------------
-def match_spawn_count(num_cars, timestep_size, tSafe, time_to_complete, end_time, cars_spawned, linearly = True):
+def match_spawn_count(cars_spawned, linearly = True):
 	car_id = 1
 	spawn_vel_range = (17.88, 26.83) # All speeds in meters/sec (effectively (40, 60) mph)
 	spawn_car_every = time_to_complete/num_cars
@@ -127,7 +134,7 @@ def match_spawn_count(num_cars, timestep_size, tSafe, time_to_complete, end_time
 		spawn_count = int(t/spawn_car_every)
 		new_spawns = spawn_count - len(cars_spawned)
 		if new_spawns is not 0:
-			free_lanes = check_voided_lanes(t, tSafe, cars_spawned)
+			free_lanes = check_voided_lanes(t, cars_spawned)
 			if not free_lanes: # Checks if free_lanes isempty
 				continue
 			if new_spawns > len(free_lanes):
@@ -135,13 +142,14 @@ def match_spawn_count(num_cars, timestep_size, tSafe, time_to_complete, end_time
 				print ("Not enough free lanes, the rest of the needed cars will attempt to spawn next timestep.")
 			rand_car_lanes = np.random.choice(free_lanes, new_spawns, replace=False)
 			for lane in rand_car_lanes:
-				x, y, heading, vel = init_state(t, end_time, lane)
+				x, y, heading, vel, acc = init_state(t, lane)
 				vel[0] = (spawn_vel_range[1] - spawn_vel_range[0])*np.random.random_sample() + spawn_vel_range[0]
-				cars_spawned.append(car(car_id, lane, np.arange(t, end_time + timestep_size, timestep_size), x, y, heading, 0, vel, 0))
+				acc[0] = -vel[0] / (2*dMax/vel[0])
+				cars_spawned.append(car(car_id, lane, np.arange(t, end_time + timestep_size, timestep_size), x, y, heading, 0, vel, acc))
 				car_id = car_id + 1
 	return cars_spawned
 
-def check_voided_lanes(t, tSafe, cars_spawned):
+def check_voided_lanes(t, cars_spawned):
 #check if cars in the same lane arent within a certain time tSafe of each other before adding them
 	lane_set = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}
 	free_lanes = lane_set
@@ -152,15 +160,16 @@ def check_voided_lanes(t, tSafe, cars_spawned):
 			break
 	return list(free_lanes) 
 
-def init_state(t, end_time, lane):
+def init_state(t, lane):
 	x = np.arange(t, end_time + timestep_size, timestep_size)
 	y = np.arange(t, end_time + timestep_size, timestep_size)
 	h = np.arange(t, end_time + timestep_size, timestep_size)
 	vel = np.arange(t, end_time + timestep_size, timestep_size)
+	acc = np.arange(t, end_time + timestep_size, timestep_size)
 	x[0] = x_states[lane]
 	y[0] = y_states[lane]
 	h[0] = h_states[lane]
-	return x, y, h, vel
+	return x, y, h, vel, acc
 
 
 
@@ -169,9 +178,9 @@ def main():
 	np.random.seed(0)
 	global x_states, y_states, h_states, timestep_size, num_cars, tSafe, time_to_complete, end_time, dMax, dSafe, lane_width
 	timestep_size = 0.1 # Must be a float
-	num_cars = 10.0 # Must be a float
-	tSafe = 1.0 # Must be a float
-	time_to_complete = 50.0 # Must be a float
+	num_cars = 40.0 # Must be a float
+	tSafe = 0.2 # Must be a float
+	time_to_complete = 10.0 # Must be a float
 	end_time = 100.0 # Must be a float
 	cars_spawned = []
 	dMax = 148 
@@ -217,10 +226,10 @@ def main():
 	 11:90
 	 }
 
-
-	cars_spawned = match_spawn_count(num_cars, timestep_size, tSafe, time_to_complete, end_time, cars_spawned)
-	cm = carManager(cars_spawned)
 	pdb.set_trace()
+	cars_spawned = match_spawn_count(cars_spawned)
+	cm = carManager(cars_spawned)
+	
 	for time in np.arange(0, end_time + timestep_size, timestep_size):
 		time = round(time,3)
 		cm.update(time)
