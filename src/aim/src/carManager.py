@@ -1,15 +1,23 @@
-#!/usr/bin/env python  
+#!/usr/bin/env python 
 import rospy
+from visualization_msgs.msg import Marker, MarkerArray
+from geometry_msgs.msg import Point
+from geometry_msgs.msg import Quaternion
+#from aim.srv import *
 import numpy as np
 import math
 import pdb
-#from aim.srv import *
+import tf
+import time
+import visualizeSim
+import warnings
 
 # Class for each car's attr
 class car:
 	def __init__(self, car_id, lane_id, t, x, y, heading, angular_V, vel, acc, priority = 0,
 		length = 4.9784, width = 1.96342, max_V = 249.448, max_A = 43.47826087, min_A = 43.47826087, 
 		max_lateral_g = 1.2 , reservation = False):
+		self.follow_car = None # For visualization purposes
 		self.car_id = car_id
 		self.lane_id = lane_id
 		self.priority = priority
@@ -34,59 +42,65 @@ class car:
 
 
 	def _update(self, time, follow_car = None):
-		for i in range(0, len(self.t)):
-			if time == round(self.t[i],3):
-				curr_t_index = i
-				break
 		if self.reservation is True:
-			# Follow x, y, heading, vel
+			# Follow x, y, heading, vel given by IM
 			pass
 		else:
+			for i in range(0, len(self.t)):
+				if time == round(self.t[i],3):
+					curr_t_index = i
+					break
+			if self.vel[curr_t_index] == 0 and follow_car is not None and follow_car.reservation == False: # ---------------------FOR OPTIMIZATION (SINCE NO IM PRESENT)----------------
+				return
 			self.heading[curr_t_index] = self.heading[curr_t_index - 1]
-			#braking_slope = self.vel[curr_t_index - 1]/((dMax - self.x[curr_t_index - 1])/self.vel[curr_t_index - 1])
 			if self.lane_id == 0 or self.lane_id == 1 or self.lane_id == 2:
 				# Position calculations for South lanes
 				self.y[curr_t_index] = self.y[curr_t_index - 1] - (0.5*self.acc[curr_t_index - 1]*(timestep_size**2)) + self.vel[curr_t_index - 1]*timestep_size
 				self.x[curr_t_index] = self.x[curr_t_index - 1]
+				stopping_distance = (dMax - self.y[curr_t_index] - self.length/2)
 			elif self.lane_id == 3 or self.lane_id == 4 or self.lane_id == 5:
 				# Position calculations for East lanes
 				self.y[curr_t_index] = self.y[curr_t_index - 1]
 				self.x[curr_t_index] = self.x[curr_t_index - 1] + (0.5*self.acc[curr_t_index - 1]*(timestep_size**2)) - self.vel[curr_t_index - 1]*timestep_size
+				stopping_distance = (self.x[curr_t_index] - (dMax+6*lane_width) - self.length/2)
 			elif self.lane_id == 6 or self.lane_id == 7 or self.lane_id == 8:
 				# Position calculations for North lanes
 				self.x[curr_t_index] = self.x[curr_t_index - 1]
 				self.y[curr_t_index] = self.y[curr_t_index - 1] + (0.5*self.acc[curr_t_index - 1]*(timestep_size**2)) - self.vel[curr_t_index - 1]*timestep_size
+				stopping_distance = (self.y[curr_t_index] - (dMax+6*lane_width) - self.length/2)
 			elif self.lane_id == 9 or self.lane_id == 10 or self.lane_id == 11:
 				# Position calculations for West lanes
 				self.x[curr_t_index] = self.x[curr_t_index - 1] - (0.5*self.acc[curr_t_index - 1]*(timestep_size**2)) + self.vel[curr_t_index - 1]*timestep_size
 				self.y[curr_t_index] = self.y[curr_t_index - 1]
-			new_speed_lead = self.vel[curr_t_index - 1] + self.acc[curr_t_index - 1]*timestep_size
+				stopping_distance = (dMax - self.x[curr_t_index] - self.length/2)
+			self.vel[curr_t_index] = self.vel[curr_t_index - 1] + self.acc[curr_t_index - 1]*timestep_size
 			if follow_car is None:
-				new_speed = new_speed_lead
-				self.acc[curr_t_index] = (-self.vel[0] / (2*dMax/self.vel[0]))
+				# if stopping_distance <= dSafe:
+				#     self.acc[curr_t_index] = -10 
+				# else:
+				self.acc[curr_t_index] = (-self.vel[curr_t_index - 1] / (2*stopping_distance/self.vel[curr_t_index - 1]))
 			else:
 				for i in range(0, len(follow_car.t)):
 					if time == round(follow_car.t[i],3):
 						f_curr_t_index = i
 						break
-				car_gap = (follow_car.x[f_curr_t_index] - self.x[curr_t_index]) + (follow_car.y[f_curr_t_index] - self.y[curr_t_index])
-				#new_speed_follow = follow_car.vel[f_curr_t_index] + ((car_gap - dSafe)*timestep_size)
-				#self.acc[curr_t_index] = (follow_car.vel[f_curr_t_index - 1]**2 - self.vel[curr_t_index - 1]**2)/2*(car_gap - dSafe)
+				if self.lane_id == 0 or self.lane_id == 1 or self.lane_id == 2: # South lanes
+					car_gap = (follow_car.y[f_curr_t_index] - follow_car.length/2) - (self.y[curr_t_index] + self.length/2)
+				elif self.lane_id == 3 or self.lane_id == 4 or self.lane_id == 5: # East lanes
+					car_gap = (self.x[curr_t_index] - self.length/2 ) - (follow_car.x[f_curr_t_index] + follow_car.length/2)
+				elif self.lane_id == 6 or self.lane_id == 7 or self.lane_id == 8: # North lanes
+					car_gap = (self.y[curr_t_index] - self.length/2) - (follow_car.y[f_curr_t_index] + follow_car.length/2)
+				elif self.lane_id == 9 or self.lane_id == 10 or self.lane_id == 11: # West lanes
+					car_gap = (follow_car.x[f_curr_t_index] - follow_car.length/2) - (self.x[curr_t_index] + self.length/2)
 				self.acc[curr_t_index] = (follow_car.vel[f_curr_t_index - 1] - self.vel[curr_t_index - 1])/(2*(car_gap - dSafe)/self.vel[curr_t_index - 1])
-				new_speed_follow = self.vel[curr_t_index - 1] + self.acc[curr_t_index - 1]*timestep_size
+				if car_gap <= 0.5*dSafe:
+					self.acc[curr_t_index] = self.acc[curr_t_index] - math.exp(0.5*dSafe - car_gap)
 				if follow_car.reservation is True:
-					# Take Minimums	
-					new_speed = min(new_speed_follow, new_speed_lead)
-					#self.acc[curr_t_index] = min(self.acc[curr_t_index], follow_car.acc[f_curr_t_index])
-				else:
-					# Stop behind follow_car by dSafe
-					new_speed = new_speed_follow
-					#self.acc[curr_t_index] = min(self.acc[curr_t_index], follow_car.acc[f_curr_t_index])
-			self.vel[curr_t_index] = new_speed
-			if new_speed <= 3:
+					self.acc[curr_t_index] = (-self.vel[curr_t_index - 1] / (2*stopping_distance/self.vel[curr_t_index - 1]))
+			if self.vel[curr_t_index] <= 2:
 				self.vel[curr_t_index] = 0
 				self.acc[curr_t_index] = 0
-		return self
+		# return self
 
 
 class carManager:
@@ -104,10 +118,11 @@ class carManager:
 			if round(self.car_list[i].t[1],3) <= time:
 				follow_car = None
 				for j in range(i-1, -1, -1):
-					if self.car_list[j].lane_id == self.car_list[i].lane_id:
+					if self.car_list[j].lane_id == self.car_list[i].lane_id: # DEBATE placing "and self.car_list[j].reservation == False 
 						follow_car = self.car_list[j]
+						self.car_list[i].follow_car = self.car_list[j] # For visualization purposes
 						break
-				self.car_list[i] = self.car_list[i]._update(time, follow_car)
+				self.car_list[i]._update(time, follow_car)
 			else:
 				break
 
@@ -171,16 +186,15 @@ def init_state(t, lane):
 	h[0] = h_states[lane]
 	return x, y, h, vel, acc
 
-
-
 def main():
+	warnings.filterwarnings("ignore")
 	# ----------------------------- Sim configurations ------------------------------
-	np.random.seed(0)
+	np.random.seed(1)
 	global x_states, y_states, h_states, timestep_size, num_cars, tSafe, time_to_complete, end_time, dMax, dSafe, lane_width
 	timestep_size = 0.1 # Must be a float
 	num_cars = 40.0 # Must be a float
 	tSafe = 0.2 # Must be a float
-	time_to_complete = 10.0 # Must be a float
+	time_to_complete = 50.0 # Must be a float
 	end_time = 100.0 # Must be a float
 	cars_spawned = []
 	dMax = 148 
@@ -225,15 +239,25 @@ def main():
 	 10:90,
 	 11:90
 	 }
-
-	pdb.set_trace()
+	print("Generating Cars...")
 	cars_spawned = match_spawn_count(cars_spawned)
+	print("Generated Cars.\n Running Simulation, this may take a while...")
 	cm = carManager(cars_spawned)
-	
-	for time in np.arange(0, end_time + timestep_size, timestep_size):
-		time = round(time,3)
-		cm.update(time)
-	pdb.set_trace()
+	start_time = time.time()
+
+	for sim_time in np.arange(0, end_time + timestep_size, timestep_size):
+		sim_time = round(sim_time,3)
+		# if round(sim_time,1).is_integer():
+		# 	print("Simulation time:", round(sim_time,1))
+		cm.update(sim_time)
+
+	completion_time = time.time() - start_time
+	print "Simulation Complete \n Execution Time: ", round(completion_time,2), " seconds"
+	print("Initiating Visualization. Please run Rviz")
+
+	visualizeSim.main(cm.car_list, dMax, lane_width, timestep_size, end_time)
+	print("Visualization complete and shutdown successful!")
+
 	#rospy.init_node('car_manager')
 	#rate = rospy.Rate(100.0)
 
