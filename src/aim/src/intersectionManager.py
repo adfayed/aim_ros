@@ -10,11 +10,11 @@ def handle_car_request(req):
     return IntersectionManagerResponse(successfully_scheduled)
 
 # Temporary function names
-def schedule(car)
+def schedule(car):
 
-def checkCollision()
+def checkCollision():
 
-def createTrajectory()
+def createTrajectory():
 
 def main():
     rospy.init_node('intersection_manager_server')
