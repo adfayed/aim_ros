@@ -11,6 +11,7 @@ import tf
 import time
 import visualizeSim
 import warnings
+import traceback, sys, code
 
 # Class for each car's attr
 class car:
@@ -50,6 +51,7 @@ class car:
 				if time == round(self.t[i],3):
 					curr_t_index = i
 					break
+			#curr_t_index = int((round(time - self.t[0],1))/timestep_size)
 			if self.vel[curr_t_index] == 0 and follow_car is not None and follow_car.reservation == False: # ---------------------FOR OPTIMIZATION (SINCE NO IM PRESENT)----------------
 				return
 			self.heading[curr_t_index] = self.heading[curr_t_index - 1]
@@ -84,6 +86,7 @@ class car:
 					if time == round(follow_car.t[i],3):
 						f_curr_t_index = i
 						break
+				#f_curr_t_index = int((round(time - follow_car.t[0],1))/timestep_size)
 				if self.lane_id == 0 or self.lane_id == 1 or self.lane_id == 2: # South lanes
 					car_gap = (follow_car.y[f_curr_t_index] - follow_car.length/2) - (self.y[curr_t_index] + self.length/2)
 				elif self.lane_id == 3 or self.lane_id == 4 or self.lane_id == 5: # East lanes
@@ -93,14 +96,27 @@ class car:
 				elif self.lane_id == 9 or self.lane_id == 10 or self.lane_id == 11: # West lanes
 					car_gap = (follow_car.x[f_curr_t_index] - follow_car.length/2) - (self.x[curr_t_index] + self.length/2)
 				self.acc[curr_t_index] = (follow_car.vel[f_curr_t_index - 1] - self.vel[curr_t_index - 1])/(2*(car_gap - dSafe)/self.vel[curr_t_index - 1])
-				if car_gap <= 0.5*dSafe:
-					self.acc[curr_t_index] = self.acc[curr_t_index] - math.exp(0.5*dSafe - car_gap)
+				if car_gap <= 1.5*dSafe:
+					self.acc[curr_t_index] = self.acc[curr_t_index] - math.exp(1.5*dSafe - car_gap)
+					# try:
+					# 	self.acc[curr_t_index] = self.acc[curr_t_index] - math.exp(0.5*dSafe - car_gap)
+					# except OverflowError as err:
+					# 	print "Overflow Error: Something went wrong"
+					# 	self.acc[curr_t_index] = 0
+					# except:
+					# 	type, value, tb = sys.exc_info()
+					# 	traceback.print_exc()
+					# 	last_frame = lambda tb=tb: last_frame(tb.tb_next) if tb.tb_next else tb
+					# 	frame = last_frame().tb_frame
+					# 	ns = dict(frame.f_globals)
+					# 	ns.update(frame.f_locals)
+					# 	code.interact(local=ns)
 				if follow_car.reservation is True:
 					self.acc[curr_t_index] = (-self.vel[curr_t_index - 1] / (2*stopping_distance/self.vel[curr_t_index - 1]))
 			if self.vel[curr_t_index] <= 2:
 				self.vel[curr_t_index] = 0
 				self.acc[curr_t_index] = 0
-		# return self
+		#return curr_t_index
 
 
 class carManager:
@@ -144,24 +160,36 @@ def car_request_client(car_id, lane_id, t, x, y, heading, angular_V, vel, acc, p
 def match_spawn_count(cars_spawned, linearly = True):
 	car_id = 1
 	spawn_vel_range = (17.88, 26.83) # All speeds in meters/sec (effectively (40, 60) mph)
-	spawn_car_every = time_to_complete/num_cars
-	for t in np.arange(0, time_to_complete + timestep_size, timestep_size):
-		spawn_count = int(t/spawn_car_every)
-		new_spawns = spawn_count - len(cars_spawned)
-		if new_spawns is not 0:
-			free_lanes = check_voided_lanes(t, cars_spawned)
-			if not free_lanes: # Checks if free_lanes isempty
-				continue
-			if new_spawns > len(free_lanes):
-				new_spawns = len(free_lanes)
-				print ("Not enough free lanes, the rest of the needed cars will attempt to spawn next timestep.")
-			rand_car_lanes = np.random.choice(free_lanes, new_spawns, replace=False)
-			for lane in rand_car_lanes:
-				x, y, heading, vel, acc = init_state(t, lane)
-				vel[0] = (spawn_vel_range[1] - spawn_vel_range[0])*np.random.random_sample() + spawn_vel_range[0]
-				acc[0] = -vel[0] / (2*dMax/vel[0])
-				cars_spawned.append(car(car_id, lane, np.arange(t, end_time + timestep_size, timestep_size), x, y, heading, 0, vel, acc))
-				car_id = car_id + 1
+	if not linearly:
+		pass
+		# spawn_car_every = 0
+		# for t in np.arange(0, time_to_complete + timestep_size, timestep_size):
+		# 	spawn_car_every = 8*time_to_complete/num_cars
+		# 	if t > 1/8*time_to_complete:
+		# 		spawn_car_every = 4*time_to_complete/num_cars
+		# 	elif t > 1/4*time_to_complete:
+		# 		spawn_car_every = 2*time_to_complete/num_cars
+		# 	elif: t> 1/2*time_to_complete:
+		# 		spawn_car_every = time_to_complete/num_cars
+	else:
+		spawn_car_every = time_to_complete/num_cars
+		for t in np.arange(0, time_to_complete + timestep_size, timestep_size):
+			spawn_count = int(t/spawn_car_every)
+			new_spawns = spawn_count - len(cars_spawned)
+			if new_spawns is not 0:
+				free_lanes = check_voided_lanes(t, cars_spawned)
+				if not free_lanes: # Checks if free_lanes isempty
+					continue
+				if new_spawns > len(free_lanes):
+					new_spawns = len(free_lanes)
+					print ("Not enough free lanes, the rest of the needed cars will attempt to spawn next timestep.")
+				rand_car_lanes = np.random.choice(free_lanes, new_spawns, replace=False)
+				for lane in rand_car_lanes:
+					x, y, heading, vel, acc = init_state(t, lane)
+					vel[0] = (spawn_vel_range[1] - spawn_vel_range[0])*np.random.random_sample() + spawn_vel_range[0]
+					acc[0] = -vel[0] / (2*dMax/vel[0])
+					cars_spawned.append(car(car_id, lane, np.arange(t, end_time + timestep_size, timestep_size), x, y, heading, 0, vel, acc))
+					car_id = car_id + 1
 	return cars_spawned
 
 def check_voided_lanes(t, cars_spawned):

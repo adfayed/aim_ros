@@ -277,8 +277,8 @@ def main(car_list, dMax, lane_width, timestep_size, end_time):
                 if marker_temp.id == car_list[i].car_id and car_list[i].t[0] <= viz_time*timestep_size:
                     for j in range(len(car_list[i].t)):
                         if viz_time*timestep_size == round(car_list[i].t[j],2):
-                            marker_temp.pose.position.x = car_list[i].x[j]
-                            marker_temp.pose.position.y = car_list[i].y[j]
+                            marker_temp.pose.position.x = car_list[i].x[j] #+ car_list[i].length/2*math.cos(car_list[i].heading[j])
+                            marker_temp.pose.position.y = car_list[i].y[j] #+ car_list[i].length/2*math.sin(car_list[i].heading[j])
                             marker_temp.pose.orientation = Quaternion(*tf.transformations.quaternion_from_euler(0, 0, float(math.radians(car_list[i].heading[j]))))
                             if car_list[i].follow_car is not None:
                                 marker_temp.color.r = 0.0 
