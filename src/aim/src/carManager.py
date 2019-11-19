@@ -42,18 +42,11 @@ class car:
 		self.reservation = reservation
 
 
-	def _update(self, time, follow_car = None):
+	def _update(self, curr_t_index, follow_car = None , f_curr_t_index = None):
 		if self.reservation is True:
 			# Follow x, y, heading, vel given by IM
 			pass
 		else:
-			for i in range(0, len(self.t)):
-				if time == round(self.t[i],3):
-					curr_t_index = i
-					break
-			#curr_t_index = int((round(time - self.t[0],1))/timestep_size)
-			if self.vel[curr_t_index] == 0 and follow_car is not None and follow_car.reservation == False: # ---------------------FOR OPTIMIZATION (SINCE NO IM PRESENT)----------------
-				return
 			self.heading[curr_t_index] = self.heading[curr_t_index - 1]
 			if self.lane_id == 0 or self.lane_id == 1 or self.lane_id == 2:
 				# Position calculations for South lanes
@@ -82,11 +75,6 @@ class car:
 				# else:
 				self.acc[curr_t_index] = (-self.vel[curr_t_index - 1] / (2*stopping_distance/self.vel[curr_t_index - 1]))
 			else:
-				for i in range(0, len(follow_car.t)):
-					if time == round(follow_car.t[i],3):
-						f_curr_t_index = i
-						break
-				#f_curr_t_index = int((round(time - follow_car.t[0],1))/timestep_size)
 				if self.lane_id == 0 or self.lane_id == 1 or self.lane_id == 2: # South lanes
 					car_gap = (follow_car.y[f_curr_t_index] - follow_car.length/2) - (self.y[curr_t_index] + self.length/2)
 				elif self.lane_id == 3 or self.lane_id == 4 or self.lane_id == 5: # East lanes
@@ -112,7 +100,8 @@ class car:
 					# 	ns.update(frame.f_locals)
 					# 	code.interact(local=ns)
 				if follow_car.reservation is True:
-					self.acc[curr_t_index] = (-self.vel[curr_t_index - 1] / (2*stopping_distance/self.vel[curr_t_index - 1]))
+					self.acc[curr_t_index] = min((follow_car.vel[f_curr_t_index - 1] - self.vel[curr_t_index - 1])/(2*(car_gap - dSafe)/self.vel[curr_t_index - 1]),
+						(-self.vel[curr_t_index - 1] / (2*stopping_distance/self.vel[curr_t_index - 1])))
 			if self.vel[curr_t_index] <= 2:
 				self.vel[curr_t_index] = 0
 				self.acc[curr_t_index] = 0
@@ -123,24 +112,38 @@ class carManager:
 	def __init__(self, car_list = []):
 		self.car_list = car_list
 
-	def sendRequests(self, time):
-		for car in self.car_list:
-			if car.reservation is not True and car.t[0] <= time:
-				car.reservation = car_request_client(car.car_id, car.lane_id, car.t, 
-					car.x, car.y, car.heading, car.angular_V, car.vel, car.acc, car.priority, car.length, car.width, car.max_V, car.max_A, car.min_A, car.max_lateral_g)
-
 	def update(self, time):
 		for i in range(0,len(self.car_list)):
-			if round(self.car_list[i].t[1],3) <= time:
-				follow_car = None
-				for j in range(i-1, -1, -1):
-					if self.car_list[j].lane_id == self.car_list[i].lane_id: # DEBATE placing "and self.car_list[j].reservation == False 
-						follow_car = self.car_list[j]
-						self.car_list[i].follow_car = self.car_list[j] # For visualization purposes
-						break
-				self.car_list[i]._update(time, follow_car)
+			if self.car_list[i].reservation: 
+				continue
 			else:
-				break
+				curr_t_index = None
+				f_curr_t_index = None
+				if round(self.car_list[i].t[0],3) <= time:
+					for q in range(0, len(self.t)):
+						if time == round(self.t[q],3):
+							curr_t_index = q
+							break
+					response = car_request_client(self.car_list[i].car_id, self.car_list[i].lane_id, self.car_list[i].t[curr_t_index], 
+						self.car_list[i].x[curr_t_index], self.car_list[i].y[curr_t_index], self.car_list[i].heading[curr_t_index], 
+						self.car_list[i].angular_V, self.car_list[i].vel[curr_t_index], self.car_list[i].acc[curr_t_index], 
+						self.car_list[i].priority, self.car_list[i].length, self.car_list[i].width, self.car_list[i].max_V, 
+						self.car_list[i].max_A, self.car_list[i].min_A, self.car_list[i].max_lateral_g)
+					if not response.success:
+						if round(self.car_list[i].t[1],3) <= time:
+							follow_car = None
+							for j in range(i-1, -1, -1):
+								if self.car_list[j].lane_id == self.car_list[i].lane_id: # DEBATE placing "and self.car_list[j].reservation == False 
+									follow_car = self.car_list[j]
+									for u in range(0, len(follow_car.t)):
+										if time == round(follow_car.t[u],3):
+											f_curr_t_index = u
+											break
+									self.car_list[i].follow_car = self.car_list[j] # For visualization purposes
+									break
+							self.car_list[i]._update(curr_t_index+1, follow_car, f_curr_t_index)
+				else:
+					break
 
 
 # This is the client's fuction sending a car's info to the server (intersectionManager.py service) as a request to pass
