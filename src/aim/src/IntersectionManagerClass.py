@@ -3,7 +3,7 @@ import rospy
 from aim.srv import *
 import numpy as np
 import math
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
 # Incase we need transformations
 import tf_conversions
@@ -54,7 +54,7 @@ class IntersectionManager:
 		self.__phase = 0		# Used to determine what phase the traffic light policy is in
 		self.__time_to_change = 0		# Used to know when it is ok to change to a different phase in the traffic light policy
 		self.__conflict = False		# Used to determine if the phase needs to change
-		#self.service = rospy.Service('car_request', IntersectionManager, self.handle_car_request)
+		self.service = rospy.Service('car_request', IntersectionManager, self.handle_car_request)
 
 	def handle_car_request(self, req):
 		# print "Requested car's info [%s  %s  %s  %s  %s %s %s  %s %s %s]"%(req.car_id, req.lane_id, req.priority, req.t, req.x, req.y, req.heading, req.angular_V, req.vel, req.acc)
@@ -141,16 +141,16 @@ class IntersectionManager:
 
 		# Calculate the initial bounding box
 		box = np.array([[[xs[0] - (car_w / 2)],
-						 [ys[0]],
+						 [ys[0] + (car_l / 2)],
 						 [1]],
 						[[xs[0] + (car_w / 2)],
-						 [ys[0]],
+						 [ys[0] + (car_l / 2)],
 						 [1]],
 						[[xs[0] - (car_w / 2)],
-						 [ys[0] - car_l],
+						 [ys[0] - (car_l / 2)],
 						 [1]],
 						[[xs[0] + (car_w / 2)],
-						 [ys[0] - car_l],
+						 [ys[0] - (car_l / 2)],
 						 [1]]])
 		# Rotate so heading in correct direction
 		T = np.array([[1, 0, -xs[0]],
@@ -1256,6 +1256,7 @@ class IntersectionManager:
 
 def main():
 	rospy.init_node('intersection_manager_server')
+	# rate = rospy.Rate(100.0)
 	gsz = 1
 	isz = 320
 	dMax = 148
@@ -1264,6 +1265,8 @@ def main():
 	policy = 0
 	IM = IntersectionManager(gsz, isz, dMax, dMin, timestep, policy)
 	rospy.spin()
+	# while not rospy.is_shutdown():
+ 		# rate.sleep()
 
 
 if __name__ == '__main__':

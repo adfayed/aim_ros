@@ -54,9 +54,9 @@ car1 = Car(1, 1, 0.0, dMax + 6, isz, 180, 5.0, 5.0, 4, 2, 1, -1)
 	car2 = Car(2, 10, 0.8, 0, dMax + 6, 90, 5.0, 5.0, 4, 2, 1, -1)
 	success1, xs1, ys1, hs1, vs1, ts1 = IM.handle_car_request(car1)
 	success2, xs2, ys2, hs2, vs2, ts2 = IM.handle_car_request(car2)
-	time_2_stop1 = (dMax * 2) / car1.vel
+	time_2_stop1 = ((dMax - 2) * 2) / car1.vel
 	accel1 = -car1.vel / time_2_stop1
-	time_2_stop2 = (dMax * 2) / car2.vel
+	time_2_stop2 = ((dMax - 2) * 2) / car2.vel
 	accel2 = -car2.vel / time_2_stop2
 	actual_x1 = []
 	actual_y1 = []
@@ -75,30 +75,30 @@ car1 = Car(1, 1, 0.0, dMax + 6, isz, 180, 5.0, 5.0, 4, 2, 1, -1)
 			actual_h1.append(car1.heading)
 			actual_v1.append(car1.vel)
 			actual_t1.append(car1.t)
-			car1.y = car1.y - ((0.5 * accel1 * timestep**2) + (car1.vel * timestep))
+			car1.y = car1.y - ((0.5 * accel1 * timestep ** 2) + (car1.vel * timestep))
 			car1.vel = car1.vel + (accel1 * timestep)
 			if car1.vel <= 0:
 				car1.vel = 0
 				accel1 = 0
-				car1.y = isz - dMax
+				car1.y = isz - dMax - 2
 			car1.t = np.around(car1.t + timestep, decimals=10)
-			#print "Timestep: %s\nvelo: %s"%(car1.t, car1.vel)
+			# print "Timestep: %s\nvelo: %s"%(car1.t, car1.vel)
 			success1, xs1, ys1, hs1, vs1, ts1 = IM.handle_car_request(car1)
 		if not success2:
-			#visualize(isz, dMax, dMin, [car2.x], [car2.y], [car2.heading], [car2], 1, False)
+			# visualize(isz, dMax, dMin, [car2.x], [car2.y], [car2.heading], [car2], 1, False)
 			actual_x2.append(car2.x)
 			actual_y2.append(car2.y)
 			actual_h2.append(car2.heading)
 			actual_v2.append(car2.vel)
 			actual_t2.append(car2.t)
-			car2.x = car2.x + ((0.5 * accel2 * timestep**2) + (car2.vel * timestep))
+			car2.x = car2.x + ((0.5 * accel2 * timestep ** 2) + (car2.vel * timestep))
 			car2.vel = car2.vel + (accel2 * timestep)
 			if car2.vel <= 0:
 				car2.vel = 0
 				accel2 = 0
-				car2.x = dMax
+				car2.x = dMax - 2
 			car2.t = np.around(car2.t + timestep, decimals=10)
-			#print "Timestep: %s\nvelo: %s"%(car1.t, car1.vel)
+			# print "Timestep: %s\nvelo: %s"%(car1.t, car1.vel)
 			success2, xs2, ys2, hs2, vs2, ts2 = IM.handle_car_request(car2)
 		if success1 and success2:
 			break
@@ -152,19 +152,20 @@ car1 = Car(1, 1, 0.0, dMax + 6, isz, 180, 5.0, 5.0, 4, 2, 1, -1)
 		if car1pointer >= len(actual_t1) and car2pointer >= len(actual_t2):
 			break
 
-	# x2print = []
-	# y2print = []
-	# h2print = []
-	# for i in range(len(actual_x1)):
-	# 	x2print.append(actual_x1[i])
-	# 	y2print.append(actual_y1[i])
-	# 	h2print.append(actual_h1[i])
-	# for i in range(len(actual_x2)):
-	# 	x2print.append(actual_x2[i])
-	# 	y2print.append(actual_y2[i])
-	# 	h2print.append(actual_h2[i])
-	# visualize(isz, dMax, dMin, x2print, y2print, h2print, [car1, car2], [], 1, True)
-	# visualize(isz, dMax, dMin, actual_x2, actual_y2, car2, 1, True)
+
+# x2print = []
+# y2print = []
+# h2print = []
+# for i in range(len(actual_x1)):
+# 	x2print.append(actual_x1[i])
+# 	y2print.append(actual_y1[i])
+# 	h2print.append(actual_h1[i])
+# for i in range(len(actual_x2)):
+# 	x2print.append(actual_x2[i])
+# 	y2print.append(actual_y2[i])
+# 	h2print.append(actual_h2[i])
+# visualize(isz, dMax, dMin, x2print, y2print, h2print, [car1, car2], [], 1, True)
+# visualize(isz, dMax, dMin, actual_x2, actual_y2, car2, 1, True)
 
 
 def visualize(isz, dMax, dMin, x, y, h, v, car, colors, fignum=1, whole_path=True):
@@ -207,7 +208,7 @@ def visualize(isz, dMax, dMin, x, y, h, v, car, colors, fignum=1, whole_path=Tru
 	plt.plot((dMax + 20, dMax + 20), (isz, isz - dMax), '--y')
 	# Horizontal lines
 	plt.plot((0, dMax), (dMax + 4, dMax + 4), '--y')
-	plt.plot((0, dMax), (dMax + 8, dMax + 8),  '--y')
+	plt.plot((0, dMax), (dMax + 8, dMax + 8), '--y')
 	plt.plot((0, dMax), (dMax + 12, dMax + 12), '-y')
 	plt.plot((0, dMax), (dMax + 16, dMax + 16), '--y')
 	plt.plot((0, dMax), (dMax + 20, dMax + 20), '--y')
@@ -237,29 +238,27 @@ def visualize(isz, dMax, dMin, x, y, h, v, car, colors, fignum=1, whole_path=Tru
 
 def calculateBox(car, xs, ys, hs):
 	# Calculate the initial bounding box
-		box = np.array([[[xs[0] - (car.width / 2)],
-						 [ys[0]],
-						 [1]],
-						[[xs[0] + (car.width / 2)],
-						 [ys[0]],
-						 [1]],
-						[[xs[0] - (car.width / 2)],
-						 [ys[0] - car.length],
-						 [1]],
-						[[xs[0] + (car.width / 2)],
-						 [ys[0] - car.length],
-						 [1]]])
-		# Rotate so heading in correct direction
-		T = np.array([[1, 0, -xs[0]],
-					  [0, 1, -ys[0]],
-					  [0, 0, 1]])
-		R = np.array([[np.cos(np.radians(-hs[0])), -np.sin(np.radians(-hs[0])), 0],
-					  [np.sin(np.radians(-hs[0])), np.cos(np.radians(-hs[0])), 0],
-					  [0, 0, 1]])
-		R = np.around(R, decimals=10)
-		for b in range(4):
-			box[b] = np.dot(np.dot(np.dot(np.linalg.inv(T), R), T), box[b])
-		return box
-
-
+	box = np.array([[[xs[0] - (car.width / 2)],
+					 [ys[0] + (car.length / 2)],
+					 [1]],
+					[[xs[0] + (car.width / 2)],
+					 [ys[0] + (car.length / 2)],
+					 [1]],
+					[[xs[0] - (car.width / 2)],
+					 [ys[0] - (car.length / 2)],
+					 [1]],
+					[[xs[0] + (car.width / 2)],
+					 [ys[0] - (car.length / 2)],
+					 [1]]])
+	# Rotate so heading in correct direction
+	T = np.array([[1, 0, -xs[0]],
+				  [0, 1, -ys[0]],
+				  [0, 0, 1]])
+	R = np.array([[np.cos(np.radians(-hs[0])), -np.sin(np.radians(-hs[0])), 0],
+				  [np.sin(np.radians(-hs[0])), np.cos(np.radians(-hs[0])), 0],
+				  [0, 0, 1]])
+	R = np.around(R, decimals=10)
+	for b in range(4):
+		box[b] = np.dot(np.dot(np.dot(np.linalg.inv(T), R), T), box[b])
+	return box
 """
