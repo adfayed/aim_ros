@@ -48,7 +48,7 @@ class car:
 			pass
 		else:
 			self.heading[curr_t_index] = self.heading[curr_t_index - 1]
-			if self.lane_id == 0 or self.lane_id == 1 or self.lane_id == 2:
+			if self.lane_id == 6 or self.lane_id == 7 or self.lane_id == 8:
 				# Position calculations for South lanes
 				self.y[curr_t_index] = self.y[curr_t_index - 1] - (0.5*self.acc[curr_t_index - 1]*(timestep_size**2)) + self.vel[curr_t_index - 1]*timestep_size
 				self.x[curr_t_index] = self.x[curr_t_index - 1]
@@ -58,7 +58,7 @@ class car:
 				self.y[curr_t_index] = self.y[curr_t_index - 1]
 				self.x[curr_t_index] = self.x[curr_t_index - 1] + (0.5*self.acc[curr_t_index - 1]*(timestep_size**2)) - self.vel[curr_t_index - 1]*timestep_size
 				stopping_distance = (self.x[curr_t_index] - (dMax+6*lane_width) - self.length/2)
-			elif self.lane_id == 6 or self.lane_id == 7 or self.lane_id == 8:
+			elif self.lane_id == 0 or self.lane_id == 1 or self.lane_id == 2:
 				# Position calculations for North lanes
 				self.x[curr_t_index] = self.x[curr_t_index - 1]
 				self.y[curr_t_index] = self.y[curr_t_index - 1] + (0.5*self.acc[curr_t_index - 1]*(timestep_size**2)) - self.vel[curr_t_index - 1]*timestep_size
@@ -75,11 +75,11 @@ class car:
 				# else:
 				self.acc[curr_t_index] = (-self.vel[curr_t_index - 1] / (2*stopping_distance/self.vel[curr_t_index - 1]))
 			else:
-				if self.lane_id == 0 or self.lane_id == 1 or self.lane_id == 2: # South lanes
+				if self.lane_id == 6 or self.lane_id == 7 or self.lane_id == 8: # South lanes
 					car_gap = (follow_car.y[f_curr_t_index] - follow_car.length/2) - (self.y[curr_t_index] + self.length/2)
 				elif self.lane_id == 3 or self.lane_id == 4 or self.lane_id == 5: # East lanes
 					car_gap = (self.x[curr_t_index] - self.length/2 ) - (follow_car.x[f_curr_t_index] + follow_car.length/2)
-				elif self.lane_id == 6 or self.lane_id == 7 or self.lane_id == 8: # North lanes
+				elif self.lane_id == 0 or self.lane_id == 1 or self.lane_id == 2: # North lanes
 					car_gap = (self.y[curr_t_index] - self.length/2) - (follow_car.y[f_curr_t_index] + follow_car.length/2)
 				elif self.lane_id == 9 or self.lane_id == 10 or self.lane_id == 11: # West lanes
 					car_gap = (follow_car.x[f_curr_t_index] - follow_car.length/2) - (self.x[curr_t_index] + self.length/2)
@@ -129,7 +129,12 @@ class carManager:
 						self.car_list[i].angular_V, self.car_list[i].vel[curr_t_index], self.car_list[i].acc[curr_t_index], 
 						self.car_list[i].priority, self.car_list[i].length, self.car_list[i].width, self.car_list[i].max_V, 
 						self.car_list[i].max_A, self.car_list[i].min_A, self.car_list[i].max_lateral_g)
-					if not response.success:
+					if response.success:
+						self.car_list[i].x = self.car_list[i].x[0:curr_t_index].append(response.x)
+						self.car_list[i].y = self.car_list[i].y[0:curr_t_index].append(response.y)
+						self.car_list[i].vel = self.car_list[i].vel[0:curr_t_index].append(response.vel)
+						#self.car_list[i].t
+					else:
 						if round(self.car_list[i].t[1],3) <= time:
 							follow_car = None
 							for j in range(i-1, -1, -1):
@@ -231,41 +236,41 @@ def main():
 	dMax = 148 
 	dSafe = 2
 	lane_width = 3.66 
-	x_states = {0: dMax+3.5*lane_width,
-	 1:dMax+4.5*lane_width,
-	 2:dMax+5.5*lane_width,
+	x_states = {0: dMax+0.5*lane_width,
+	 1:dMax+1.5*lane_width,
+	 2:dMax+2.5*lane_width,
 	 3:2*dMax+6*lane_width,
 	 4:2*dMax+6*lane_width,
 	 5:2*dMax+6*lane_width,
-	 6:dMax+2.5*lane_width,
-	 7:dMax+1.5*lane_width,
-	 8:dMax+0.5*lane_width,
+	 6:dMax+5.5*lane_width,
+	 7:dMax+4.5*lane_width,
+	 8:dMax+3.5*lane_width,
 	 9:0,
 	 10:0,
 	 11:0
 	 }
-	y_states = {0:0,
-	 1:0,
-	 2:0,
-	 3:dMax+3.5*lane_width,
+	y_states = {0:2*dMax+6*lane_width,
+	 1:2*dMax+6*lane_width,
+	 2:2*dMax+6*lane_width,
+	 3:dMax+5.5*lane_width,
 	 4:dMax+4.5*lane_width,
-	 5:dMax+5.5*lane_width,
-	 6:2*dMax+6*lane_width,
-	 7:2*dMax+6*lane_width,
-	 8:2*dMax+6*lane_width,
-	 9:dMax+2.5*lane_width,
+	 5:dMax+3.5*lane_width,
+	 6:0,
+	 7:0,
+	 8:0,
+	 9:dMax+0.5*lane_width,
 	 10:dMax+1.5*lane_width,
-	 11:dMax+0.5*lane_width
+	 11:dMax+2.5*lane_width
 	 }
-	h_states = {0:0,
-	 1:0,
-	 2:0,
+	h_states = {0:180,
+	 1:180,
+	 2:180,
 	 3:270,
 	 4:270,
 	 5:270,
-	 6:180,
-	 7:180,
-	 8:180,
+	 6:0,
+	 7:0,
+	 8:0,
 	 9:90,
 	 10:90,
 	 11:90
