@@ -3,7 +3,7 @@ import rospy
 from visualization_msgs.msg import Marker, MarkerArray
 from geometry_msgs.msg import Point
 from geometry_msgs.msg import Quaternion
-#from aim.srv import *
+from aim.srv import *
 import numpy as np
 import math
 import pdb
@@ -120,8 +120,8 @@ class carManager:
 				curr_t_index = None
 				f_curr_t_index = None
 				if round(self.car_list[i].t[0],3) <= time:
-					for q in range(0, len(self.t)):
-						if time == round(self.t[q],3):
+					for q in range(0, len(self.car_list[i].t)):
+						if time == round(self.car_list[i].t[q],3):
 							curr_t_index = q
 							break
 					response = car_request_client(self.car_list[i].car_id, self.car_list[i].lane_id, self.car_list[i].t[curr_t_index], 
@@ -155,7 +155,7 @@ class carManager:
 def car_request_client(car_id, lane_id, t, x, y, heading, angular_V, vel, acc, priority, length, width, max_V, max_A, min_A, max_lateral_g):
 	rospy.wait_for_service('car_request')
 	try:
-		car_request = rospy.ServiceProxy('car_request', IntersectionManager)
+		car_request = rospy.ServiceProxy('car_request', Request)
 		resp1 = car_request(car_id, lane_id, priority, t, x, y, heading, angular_V, vel, acc, length, width, max_V, max_A, min_A, max_lateral_g) 
 		print ("Request has returned ", resp1, " for car_id: ", car_id, ", lane_id: ", lane_id, ", t: ", t, ", x: ", x, ", y:", y, ", heading: ", heading, 
 			", angular_V: ", angular_V, ", vel: ", vel, ", acc: ", acc)
@@ -275,50 +275,50 @@ def main():
 	 10:90,
 	 11:90
 	 }
-	print("Generating Cars...")
-	cars_spawned = match_spawn_count(cars_spawned)
-	print("Generated Cars.\n Running Simulation, this may take a while...")
-	cm = carManager(cars_spawned)
-	start_time = time.time()
-
-	for sim_time in np.arange(0, end_time + timestep_size, timestep_size):
-		sim_time = round(sim_time,3)
-		# if round(sim_time,1).is_integer():
-		# 	print("Simulation time:", round(sim_time,1))
-		cm.update(sim_time)
-
-	completion_time = time.time() - start_time
-	print "Simulation Complete \n Execution Time: ", round(completion_time,2), " seconds"
-	print("Initiating Visualization. Please run Rviz")
-
-	visualizeSim.main(cm.car_list, dMax, lane_width, timestep_size, end_time)
-	print("Visualization complete and shutdown successful!")
-
-
-
-
-	# rospy.init_node('car_manager')
-	# rate = rospy.Rate(100.0)
-
 	# print("Generating Cars...")
 	# cars_spawned = match_spawn_count(cars_spawned)
 	# print("Generated Cars.\n Running Simulation, this may take a while...")
 	# cm = carManager(cars_spawned)
 	# start_time = time.time()
-	# sim_time = 0
-	# while not rospy.is_shutdown():
-	# 	cm.update(sim_time)
-	# 	sim_time = sim_time + timestep_size
-	# 	if sim_time == end_time + timestep_size:
-	# 		completion_time = time.time() - start_time
-	# 		print "Simulation Complete \n Execution Time: ", round(completion_time,2), " seconds"
-	# 		print("Initiating Visualization. Please run Rviz")
 
-	# 		visualizeSim.main(cm.car_list, dMax, lane_width, timestep_size, end_time)
-	# 		print("Visualization complete and shutdown successful!")
-	# 		rospy.signal_shutdown("Simulation Complete")
-	# 	else:
-	# 		rate.sleep()
+	# for sim_time in np.arange(0, end_time + timestep_size, timestep_size):
+	# 	sim_time = round(sim_time,3)
+	# 	# if round(sim_time,1).is_integer():
+	# 	# 	print("Simulation time:", round(sim_time,1))
+	# 	cm.update(sim_time)
+
+	# completion_time = time.time() - start_time
+	# print "Simulation Complete \n Execution Time: ", round(completion_time,2), " seconds"
+	# print("Initiating Visualization. Please run Rviz")
+
+	# visualizeSim.main(cm.car_list, dMax, lane_width, timestep_size, end_time)
+	# print("Visualization complete and shutdown successful!")
+
+
+
+
+	rospy.init_node('car_manager')
+	rate = rospy.Rate(100.0)
+
+	print("Generating Cars...")
+	cars_spawned = match_spawn_count(cars_spawned)
+	print("Generated Cars.\n Running Simulation, this may take a while...")
+	cm = carManager(cars_spawned)
+	start_time = time.time()
+	sim_time = 0
+	while not rospy.is_shutdown():
+		cm.update(sim_time)
+		sim_time = sim_time + timestep_size
+		if sim_time == end_time + timestep_size:
+			completion_time = time.time() - start_time
+			print "Simulation Complete \n Execution Time: ", round(completion_time,2), " seconds"
+			print("Initiating Visualization. Please run Rviz")
+
+			visualizeSim.main(cm.car_list, dMax, lane_width, timestep_size, end_time)
+			print("Visualization complete and shutdown successful!")
+			rospy.signal_shutdown("Simulation Complete")
+		else:
+			rate.sleep()
 		
 if __name__ == '__main__':
 	main()
