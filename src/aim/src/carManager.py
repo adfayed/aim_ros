@@ -117,7 +117,7 @@ class carManager:
 			if self.car_list[i].reservation: 
 				continue
 			else:
-				curr_t_index = None
+				curr_t_index = 0
 				f_curr_t_index = None
 				if round(self.car_list[i].t[0],3) <= time:
 					for q in range(0, len(self.car_list[i].t)):
@@ -156,12 +156,15 @@ class carManager:
 # This is the client's fuction sending a car's info to the server (intersectionManager.py service) as a request to pass
 def car_request_client(car_id, lane_id, t, x, y, heading, angular_V, vel, acc, priority, length, width, max_V, max_A, min_A, max_lateral_g):
 	rospy.wait_for_service('car_request')
+	# print(car_id, lane_id, t, x, y, heading, angular_V, vel, acc, priority, length, width, max_V, max_A, min_A, max_lateral_g)
 	try:
 		car_request = rospy.ServiceProxy('car_request', Request)
-		resp_success, resp_x, resp_y, resp_heading, resp_vel, resp_t = car_request(car_id, lane_id, priority, t, x, y, heading, angular_V, vel, acc, length, width, max_V, max_A, min_A, max_lateral_g) 
-		print ("Request has returned ", resp1, " for car_id: ", car_id, ", lane_id: ", lane_id, ", t: ", t, ", x: ", x, ", y:", y, ", heading: ", heading, 
-			", angular_V: ", angular_V, ", vel: ", vel, ", acc: ", acc)
-		resp = (resp_success, resp_x, resp_y, resp_heading, resp_vel, resp_t)
+		# resp_success, resp_x, resp_y, resp_heading, resp_vel, resp_t = car_request(car_id, int(lane_id), t, x, y, heading, angular_V, vel, acc, priority, length, width, max_V, max_A, min_A, max_lateral_g) 
+		response = car_request(car_id, int(lane_id), t, x, y, heading, angular_V, vel, acc, priority, length, width, max_V, max_A, min_A, max_lateral_g) 
+		# print ("Request has returned ", resp1, " for car_id: ", car_id, ", lane_id: ", lane_id, ", t: ", t, ", x: ", x, ", y:", y, ", heading: ", heading, 
+		# 	", angular_V: ", angular_V, ", vel: ", vel, ", acc: ", acc)
+		# resp = (resp_success, resp_x, resp_y, resp_heading, resp_vel, resp_t)
+		resp = (response.success, response.x, response.y, response.heading, response.vel, response.t)
 		return resp
 	except rospy.ServiceException, e:
 		print "Service call failed: %s"%e
@@ -231,7 +234,7 @@ def main():
 	np.random.seed(1)
 	global x_states, y_states, h_states, timestep_size, num_cars, tSafe, time_to_complete, end_time, dMax, dSafe, lane_width
 	timestep_size = 0.1 # Must be a float
-	num_cars = 40.0 # Must be a float
+	num_cars = 1	# 40.0 # Must be a float
 	tSafe = 0.2 # Must be a float
 	time_to_complete = 50.0 # Must be a float
 	end_time = 100.0 # Must be a float

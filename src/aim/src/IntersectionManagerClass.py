@@ -57,10 +57,12 @@ class IntersectionManager:
 		self.service = rospy.Service('car_request', Request, self.handle_car_request)
 
 	def handle_car_request(self, req):
+		print("Received a request")
 		# print "Requested car's info [%s  %s  %s  %s  %s %s %s  %s %s %s]"%(req.car_id, req.lane_id, req.priority, req.t, req.x, req.y, req.heading, req.angular_V, req.vel, req.acc)
 		successfully_scheduled, xs, ys, hs, vs, ts = self.__schedule(req)
 		# return successfully_scheduled, xs, ys, hs, vs, ts
-		return IntersectionManagerResponse(xs, ys, hs, vs, ts, successfully_scheduled)
+		print("Returning the request")
+		return RequestResponse(successfully_scheduled, xs, ys, hs, vs, ts)
 
 	def __schedule(self, car):
 		"""
