@@ -96,8 +96,8 @@ class IntersectionManager:
 		# Check if the car is clear using the correct policy
 		if self.policy == 0:
 			min_v = 10
-			# success, xs, ys, headings, vs, ts = self.__detectCollisions(car, max(min_v,car.vel))
-			success, xs, ys, headings, vs, ts = self.__detectCollisions(car, car.desired_velo)
+			success, xs, ys, headings, vs, ts = self.__detectCollisions(car, max(min_v,car.vel))
+			# success, xs, ys, headings, vs, ts = self.__detectCollisions(car, car.desired_velo)
 		elif self.policy == 1:
 			success, xs, ys, headings, vs, ts = self.__dresnerStonePolicy(car)
 		elif self.policy == 2:
