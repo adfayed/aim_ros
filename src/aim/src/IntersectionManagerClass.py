@@ -54,7 +54,7 @@ class IntersectionManager:
 		self.__phase = 0		# Used to determine what phase the traffic light policy is in
 		self.__time_to_change = 0		# Used to know when it is ok to change to a different phase in the traffic light policy
 		self.__conflict = False		# Used to determine if the phase needs to change
-		self.service = rospy.Service('car_request', IntersectionManager, self.handle_car_request)
+		self.service = rospy.Service('car_request', Request, self.handle_car_request)
 
 	def handle_car_request(self, req):
 		# print "Requested car's info [%s  %s  %s  %s  %s %s %s  %s %s %s]"%(req.car_id, req.lane_id, req.priority, req.t, req.x, req.y, req.heading, req.angular_V, req.vel, req.acc)
