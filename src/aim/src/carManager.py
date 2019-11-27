@@ -129,10 +129,11 @@ class carManager:
 						self.car_list[i].angular_V, self.car_list[i].vel[curr_t_index], self.car_list[i].acc[curr_t_index], 
 						self.car_list[i].priority, self.car_list[i].length, self.car_list[i].width, self.car_list[i].max_V, 
 						self.car_list[i].max_A, self.car_list[i].min_A, self.car_list[i].max_lateral_g)
-					if response.success:
-						self.car_list[i].x = self.car_list[i].x[0:curr_t_index].append(response.x)
-						self.car_list[i].y = self.car_list[i].y[0:curr_t_index].append(response.y)
-						self.car_list[i].vel = self.car_list[i].vel[0:curr_t_index].append(response.vel)
+					if response[5]:
+						self.car_list[i].x = self.car_list[i].x[0:curr_t_index].append(response[0])
+						self.car_list[i].y = self.car_list[i].y[0:curr_t_index].append(response[1])
+						self.car_list[i].heading = self.car_list[i].heading[0:curr_t_index].append(response[2])
+						self.car_list[i].vel = self.car_list[i].vel[0:curr_t_index].append(response[3])
 						#self.car_list[i].t
 					else:
 						if round(self.car_list[i].t[1],3) <= time:
@@ -156,10 +157,11 @@ def car_request_client(car_id, lane_id, t, x, y, heading, angular_V, vel, acc, p
 	rospy.wait_for_service('car_request')
 	try:
 		car_request = rospy.ServiceProxy('car_request', Request)
-		resp1 = car_request(car_id, lane_id, priority, t, x, y, heading, angular_V, vel, acc, length, width, max_V, max_A, min_A, max_lateral_g) 
+		resp_x, resp_y, resp_heading, resp_vel, resp_t, resp_success = car_request(car_id, lane_id, priority, t, x, y, heading, angular_V, vel, acc, length, width, max_V, max_A, min_A, max_lateral_g) 
 		print ("Request has returned ", resp1, " for car_id: ", car_id, ", lane_id: ", lane_id, ", t: ", t, ", x: ", x, ", y:", y, ", heading: ", heading, 
 			", angular_V: ", angular_V, ", vel: ", vel, ", acc: ", acc)
-		return resp1
+		resp = (resp_x, resp_y, resp_heading, resp_vel, resp_t, resp_success)
+		return resp
 	except rospy.ServiceException, e:
 		print "Service call failed: %s"%e
 		return False
