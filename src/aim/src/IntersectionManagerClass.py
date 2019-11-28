@@ -132,15 +132,15 @@ class IntersectionManager:
 
 	def __detectCollisions(self, car, desired_velo):
 		"""
-		:param car = the car we will look at to see if the reservation can be accepted
-		:returns: A tuple representing the trajectory. 
-				  Success = true or false indicating if the reservation is accepted or not
-				  xs = list of x-coordinates over the path
-				  ys = list of y-coordinates over the path
-				  hs = list of headings over the path
-				  vs = list of velocities over the path
-				  ts = list of timesteps over the path
-		"""
+        :param car = the car we will look at to see if the reservation can be accepted
+        :returns: A tuple representing the trajectory.
+                  Success = true or false indicating if the reservation is accepted or not
+                  xs = list of x-coordinates over the path
+                  ys = list of y-coordinates over the path
+                  hs = list of headings over the path
+                  vs = list of velocities over the path
+                  ts = list of timesteps over the path
+        """
 		# Get the trajectory along the path if the car maintains its velocity
 		# print "\rDetecting collision for car: ",car.car_id,
 		# sys.stdout.flush()
@@ -174,16 +174,16 @@ class IntersectionManager:
 		for b in range(4):
 			box[b] = np.dot(np.dot(np.dot(np.linalg.inv(T), R), T), box[b])
 
-		temp_res = np.zeros((len(ts), self.grid_length, self.grid_length))		# Hold the temp grids
-		indices = [i for i in range(len(ts))]		# Hold the index of reservations the grid in temp_res came from
+		temp_res = np.zeros((len(ts), self.grid_length, self.grid_length))  # Hold the temp grids
+		indices = [i for i in range(len(ts))]  # Hold the index of reservations the grid in temp_res came from
 		collision = False
 
 		# Check for collisions at each time
 		for time in range(len(ts)):
 			# Get the index of the grid in reservations
 			res_index = int((ts[time] * 10) % 1000)
-			temp_res[time] = self.reservations[res_index]		# Copy the grid
-			indices[time] = res_index		# Save the index
+			temp_res[time] = self.reservations[res_index]  # Copy the grid
+			indices[time] = res_index  # Save the index
 
 			# Update the position of the bounding box
 			if time > 0:
@@ -226,11 +226,11 @@ class IntersectionManager:
 					# Get the starting and ending x, y coords
 					start_x = np.around(box[points[j]][0][0], decimals=10)
 					start_y = np.around(box[points[j]][1][0], decimals=10)
-					end_x = np.around(box[points[j+1]][0][0], decimals=10)
-					end_y = np.around(box[points[j+1]][1][0], decimals=10)
+					end_x = np.around(box[points[j + 1]][0][0], decimals=10)
+					end_y = np.around(box[points[j + 1]][1][0], decimals=10)
 					# Get the starting grid coords
-					grid_x = int(math.floor(start_x/self.grid_size))
-					grid_y = int(math.floor(start_y/self.grid_size))
+					grid_x = int(math.floor(start_x / self.grid_size))
+					grid_y = int(math.floor(start_y / self.grid_size))
 					# Check that the grid position is valid
 					if grid_x < 0 or grid_x >= self.grid_length:
 						continue
@@ -267,24 +267,24 @@ class IntersectionManager:
 							break
 						temp_res[time][grid_y - 1][grid_x - 1] = 1
 					# Get the slope of the line
-					delta_x = end_x - start_x
-					delta_y = end_y - start_y
+					delta_x = np.around(end_x - start_x, decimals=7)
+					delta_y = np.around(end_y - start_y, decimals=7)
 					if delta_x == 0:
 						m = float("inf")
 					else:
 						m = np.around(delta_y / delta_x, decimals=10)
 					while check_x <= end_x or check_y <= end_y:
 						# Get the slope to the reference point
-						delta_x = check_x - start_x
-						delta_y = check_y - start_y
+						delta_x = np.around(check_x - start_x, decimals=7)
+						delta_y = np.around(check_y - start_y, decimals=7)
 						if delta_x == 0:
 							temp_m = float("inf")
 						else:
 							temp_m = np.around(delta_y / delta_x, decimals=10)
 						# Update the grid coords
-						if temp_m > m:		# Go right
+						if temp_m > m:  # Go right
 							grid_x += 1
-						elif temp_m < m:		# Go up
+						elif temp_m < m:  # Go up
 							grid_y += 1
 							# Check the grid to the left if the line is on the grid line
 							if m == float("inf") and start_x == check_x - self.grid_size and grid_x > 0:
@@ -295,7 +295,7 @@ class IntersectionManager:
 									collision = True
 									break
 								temp_res[time][grid_y][grid_x - 1] = 1
-						else:		# Go up and right
+						else:  # Go up and right
 							grid_x += 1
 							grid_y += 1
 							# Make sure we are not trying to mark a grid off the intersection
@@ -332,8 +332,8 @@ class IntersectionManager:
 					# Get the starting and ending x, y coords
 					start_x = np.around(box[points[j]][0][0], decimals=10)
 					start_y = np.around(box[points[j]][1][0], decimals=10)
-					end_x = np.around(box[points[j+2]][0][0], decimals=10)
-					end_y = np.around(box[points[j+2]][1][0], decimals=10)
+					end_x = np.around(box[points[j + 2]][0][0], decimals=10)
+					end_y = np.around(box[points[j + 2]][1][0], decimals=10)
 					# Get the starting grid coords
 					grid_x = int(math.floor(start_x / self.grid_size))
 					grid_y = int(math.floor(start_y / self.grid_size))
@@ -366,22 +366,22 @@ class IntersectionManager:
 							break
 						temp_res[time][grid_y - 1][grid_x] = 1
 					# Get the slope of the line
-					delta_x = end_x - start_x
-					delta_y = end_y - start_y
+					delta_x = np.around(end_x - start_x, decimals=7)
+					delta_y = np.around(end_y - start_y, decimals=7)
 					if delta_x == 0:
 						m = -float("inf")
 					else:
 						m = np.around(delta_y / delta_x, decimals=10)
 					while check_x <= end_x or check_y >= end_y:
 						# Get the slope to the reference point
-						delta_x = check_x - start_x
-						delta_y = check_y - start_y
+						delta_x = np.around(check_x - start_x, decimals=7)
+						delta_y = np.around(check_y - start_y, decimals=7)
 						if delta_x == 0:
 							temp_m = float("inf")
 						else:
 							temp_m = np.around(delta_y / delta_x, decimals=10)
 						# Update grid coords
-						if temp_m < m:		# Go right
+						if temp_m < m:  # Go right
 							grid_x += 1
 							# Check the grid square above, if the line is on the grid line
 							if m == 0 and start_y == check_y + self.grid_size:
@@ -392,9 +392,9 @@ class IntersectionManager:
 									collision = True
 									break
 								temp_res[time][grid_y + 1][grid_x] = 1
-						elif temp_m > m:		# Go down
+						elif temp_m > m:  # Go down
 							grid_y -= 1
-						else:		# Go down and right
+						else:  # Go down and right
 							grid_x += 1
 							grid_y -= 1
 							# Make sure we are not trying to mark a grid off the intersection
