@@ -113,11 +113,12 @@ class carManager:
 		self.car_list = car_list
 
 	def update(self, time):
+		time = round(time, 3)
 		for i in range(0,len(self.car_list)):
 			if self.car_list[i].reservation: 
 				continue
 			else:
-				curr_t_index = 0
+				curr_t_index = None
 				f_curr_t_index = None
 				if round(self.car_list[i].t[0],3) <= time:
 					for q in range(0, len(self.car_list[i].t)):
@@ -130,25 +131,40 @@ class carManager:
 						self.car_list[i].priority, self.car_list[i].length, self.car_list[i].width, self.car_list[i].max_V, 
 						self.car_list[i].max_A, self.car_list[i].min_A, self.car_list[i].max_lateral_g)
 					if response[0]:
-						print("Request accepted for Car: ",self.car_list[i].car_id)
-						self.car_list[i].x = self.car_list[i].x[0:curr_t_index].append(response[1])
-						self.car_list[i].y = self.car_list[i].y[0:curr_t_index].append(response[2])
-						self.car_list[i].heading = self.car_list[i].heading[0:curr_t_index].append(response[3])
-						self.car_list[i].vel = self.car_list[i].vel[0:curr_t_index].append(response[4])
+						print("Request accepted for Car: ",self.car_list[i].car_id," At time: ",time)
+						self.car_list[i].reservation = response[0]
+						# self.car_list[i].x = self.car_list[i].x[0:curr_t_index].append(response[1])
+						self.car_list[i].x = np.append(self.car_list[i].x[0:curr_t_index], response[1])
+						# self.car_list[i].y = self.car_list[i].y[0:curr_t_index].append(response[2])
+						self.car_list[i].y = np.append(self.car_list[i].y[0:curr_t_index], response[2])
+						# self.car_list[i].heading = self.car_list[i].heading[0:curr_t_index].append(response[3])
+						self.car_list[i].heading = np.append(self.car_list[i].heading[0:curr_t_index], response[3])
+						# self.car_list[i].vel = self.car_list[i].vel[0:curr_t_index].append(response[4])
+						self.car_list[i].vel = np.append(self.car_list[i].vel[0:curr_t_index], response[4])
 						#self.car_list[i].t
+						#################################################################################################
+						# Not updating the time causes an ArrayIndexOutOfBounds exception when looking at the follow car
+						#################################################################################################
+						self.car_list[i].t = np.append(self.car_list[i].t[0:curr_t_index], response[5])
 					else:
-						if round(self.car_list[i].t[1],3) <= time:
-							follow_car = None
-							for j in range(i-1, -1, -1):
-								if self.car_list[j].lane_id == self.car_list[i].lane_id: # DEBATE placing "and self.car_list[j].reservation == False 
-									follow_car = self.car_list[j]
-									for u in range(0, len(follow_car.t)):
-										if time == round(follow_car.t[u],3):
-											f_curr_t_index = u
-											break
-									self.car_list[i].follow_car = self.car_list[j] # For visualization purposes
-									break
-							self.car_list[i]._update(curr_t_index+1, follow_car, f_curr_t_index)
+						print("Request rejected for Car: ",self.car_list[i].car_id," At time: ",time)
+						#################################################################################
+						# I"m not sure why you have this check in here but it appears to always be false
+						# if round(self.car_list[i].t[1],3) <= time:
+						#################################################################################
+						follow_car = None
+						for j in range(i-1, -1, -1):
+							if self.car_list[j].lane_id == self.car_list[i].lane_id: # DEBATE placing "and self.car_list[j].reservation == False 
+								follow_car = self.car_list[j]
+								for u in range(0, len(follow_car.t)):
+									if time == round(follow_car.t[u],3):
+										f_curr_t_index = u
+										break
+								if f_curr_t_index == None:
+									follow_car = None
+								self.car_list[i].follow_car = self.car_list[j] # For visualization purposes
+								break
+						self.car_list[i]._update(curr_t_index+1, follow_car, f_curr_t_index)
 				else:
 					break
 
@@ -234,7 +250,7 @@ def main():
 	np.random.seed(1)
 	global x_states, y_states, h_states, timestep_size, num_cars, tSafe, time_to_complete, end_time, dMax, dSafe, lane_width
 	timestep_size = 0.1 # Must be a float
-	num_cars = 1	# 40.0 # Must be a float
+	num_cars = 40.0 # Must be a float
 	tSafe = 0.2 # Must be a float
 	time_to_complete = 50.0 # Must be a float
 	end_time = 100.0 # Must be a float
@@ -315,7 +331,7 @@ def main():
 	while not rospy.is_shutdown():
 		cm.update(sim_time)
 		sim_time = sim_time + timestep_size
-		if sim_time == end_time + timestep_size:
+		if sim_time >= end_time + timestep_size:
 			completion_time = time.time() - start_time
 			print "Simulation Complete \n Execution Time: ", round(completion_time,2), " seconds"
 			print("Initiating Visualization. Please run Rviz")

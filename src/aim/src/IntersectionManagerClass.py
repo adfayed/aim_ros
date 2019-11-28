@@ -31,7 +31,7 @@ class Car:
 
 class IntersectionManager:
 
-	def __init__(self, gsz, isz, dMax, dMin, timestep, policy=0):
+	def __init__(self, gsz, dMax, dMin, timestep, lane_width = 3.66, policy=0):
 		"""
 		:param gsz = the size of each grid square (m)
 		:param isz = the size of the entire intersection (m)
@@ -41,8 +41,8 @@ class IntersectionManager:
 		:param policy = which policy to run. 0 is our method and default
 		"""
 		self.__grid_size = gsz
-		self.__intersection_size = isz
-		self.__lane_width = 4
+		self.__intersection_size = 2 * dMax + 6 * lane_width
+		self.__lane_width = lane_width
 		self.__num_lanes = 6
 		self.__grid_length = int(math.ceil(self.__intersection_size/self.__grid_size))
 		self.__reservations = np.zeros((1000, self.__grid_length, self.__grid_length))
@@ -57,11 +57,12 @@ class IntersectionManager:
 		self.service = rospy.Service('car_request', Request, self.handle_car_request)
 
 	def handle_car_request(self, req):
-		print("Received a request")
+		print "Received a request with ID: ",req.car_id, " in lane: ",req.lane_id
 		# print "Requested car's info [%s  %s  %s  %s  %s %s %s  %s %s %s]"%(req.car_id, req.lane_id, req.priority, req.t, req.x, req.y, req.heading, req.angular_V, req.vel, req.acc)
 		successfully_scheduled, xs, ys, hs, vs, ts = self.__schedule(req)
 		# return successfully_scheduled, xs, ys, hs, vs, ts
-		print("Returning the request")
+		print "\rReturning the request with ID: ", req.car_id, " in lane: ",req.lane_id
+		sys.stdout.flush()
 		return RequestResponse(successfully_scheduled, xs, ys, hs, vs, ts)
 
 	def __schedule(self, car):
@@ -97,7 +98,10 @@ class IntersectionManager:
 
 		# Check if the car is clear using the correct policy
 		if self.policy == 0:
-			min_v = 10
+			min_v = 10.0
+			# print "Car's velocity: ",car.vel
+			# print "Car's x: ",car.x
+			# print "Car's y: ",car.y
 			success, xs, ys, headings, vs, ts = self.__detectCollisions(car, max(min_v,car.vel))
 			# success, xs, ys, headings, vs, ts = self.__detectCollisions(car, car.desired_velo)
 		elif self.policy == 1:
@@ -120,7 +124,8 @@ class IntersectionManager:
 				self.lane_q[lane].remove(car_id)
 		# If not successfully scheduled, add the car if it isn't in the queue
 		if not success:
-			if len(self.lane_q[lane]) != 0 and car_id not in self.lane_q[lane]:
+			# if len(self.lane_q[lane]) != 0 and car_id not in self.lane_q[lane]:
+			if car_id not in self.lane_q[lane]:
 				self.lane_q[lane].append(car_id)
 
 		return success, xs, ys, headings, vs, ts
@@ -137,7 +142,11 @@ class IntersectionManager:
 				  ts = list of timesteps over the path
 		"""
 		# Get the trajectory along the path if the car maintains its velocity
+		# print "\rDetecting collision for car: ",car.car_id,
+		# sys.stdout.flush()
 		xs, ys, hs, vs, ts = self.__createTrajectory(car, desired_velo)
+		# print "\rCreated trajectory for car: ",car.car_id,
+		# sys.stdout.flush()
 		car_w = car.width
 		car_l = car.length
 
@@ -714,15 +723,15 @@ class IntersectionManager:
 		# Make sure the car is stopped at the intersection and not before
 		if car.heading == 0:
 			stop_x = car.x
-			stop_y = self.dMax
+			stop_y = self.dMax - car.length / 2
 		elif car.heading == 90:
-			stop_x = self.dMax
+			stop_x = self.dMax - car.length / 2
 			stop_y = car.y
 		elif car.heading == 180:
 			stop_x = car.x
-			stop_y = self.intersection_size - self.dMax
+			stop_y = self.intersection_size - self.dMax + car.length / 2
 		elif car.heading == 270:
-			stop_x = self.intersection_size - self.dMax
+			stop_x = self.intersection_size - self.dMax + car.length / 2
 			stop_y = car.y
 		else:
 			stop_x = -1
@@ -746,6 +755,8 @@ class IntersectionManager:
 				  vs = list of velocities over the path
 				  ts = list of timesteps over the path
 		"""
+		# print "\rDesired velocity = ",desired_velo,"       "
+		# sys.stdout.flush()
 		# Initialize our lists
 		xs = [car.x]
 		ys = [car.y]
@@ -762,7 +773,7 @@ class IntersectionManager:
 			accel = min(car.max_A, delta_v / 5)
 			speeding_up = True
 		else:
-			accel = max(car.min_A, delta_v / 5)
+			accel = max(-car.min_A, delta_v / 5)
 			speeding_up = False
 
 		####################### Section 1: Straight path from dMax to intersetion ##########################
@@ -1259,13 +1270,13 @@ class IntersectionManager:
 def main():
 	rospy.init_node('intersection_manager_server')
 	# rate = rospy.Rate(100.0)
-	gsz = 1
-	isz = 320
+	gsz = 0.5
+	lane_width = 3.66
 	dMax = 148
 	dMin = 50
 	timestep = 0.1
 	policy = 0
-	IM = IntersectionManager(gsz, isz, dMax, dMin, timestep, policy)
+	IM = IntersectionManager(gsz, dMax, dMin, timestep, lane_width, policy)
 	rospy.spin()
 	# while not rospy.is_shutdown():
  		# rate.sleep()
