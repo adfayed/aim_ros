@@ -45,7 +45,7 @@ class IntersectionManager:
 		self.__lane_width = lane_width
 		self.__num_lanes = 6
 		self.__grid_length = int(math.ceil(self.__intersection_size/self.__grid_size))
-		self.__reservations = np.zeros((1000, self.__grid_length, self.__grid_length))
+		self.__reservations = np.full((1000, self.__grid_length, self.__grid_length), -1)
 		self.__policy = policy
 		self.__dMax = dMax		# The distance from the intersection the car starts making requests
 		self.__dMin = dMin		# Distance after the intersection we stop worrying about a car
@@ -174,7 +174,7 @@ class IntersectionManager:
 		for b in range(4):
 			box[b] = np.dot(np.dot(np.dot(np.linalg.inv(T), R), T), box[b])
 
-		temp_res = np.zeros((len(ts), self.grid_length, self.grid_length))  # Hold the temp grids
+		temp_res = np.full((len(ts), self.grid_length, self.grid_length), -1)  # Hold the temp grids
 		indices = [i for i in range(len(ts))]  # Hold the index of reservations the grid in temp_res came from
 		collision = False
 
@@ -237,11 +237,11 @@ class IntersectionManager:
 					elif grid_y < 0 or grid_y >= self.grid_length:
 						continue
 					# Check if it is already occupied
-					if self.reservations[res_index][grid_y][grid_x] == 1:
+					if self.reservations[res_index][grid_y][grid_x] != -1:
 						collision = True
 						break
 					# Set the grid square to occupied
-					temp_res[time][grid_y][grid_x] = 1
+					temp_res[time][grid_y][grid_x] = hs[time]
 					# Get the next reference point
 					check_x = (grid_x + 1) * self.grid_size
 					check_y = (grid_y + 1) * self.grid_size
@@ -250,22 +250,22 @@ class IntersectionManager:
 					# Check if the line starts on an edge/corner of a grid square
 					if on_left_line and grid_x > 0:
 						# Check the grid to the left
-						if self.reservations[res_index][grid_y][grid_x - 1] == 1:
+						if self.reservations[res_index][grid_y][grid_x - 1] != -1:
 							collision = True
 							break
-						temp_res[time][grid_y][grid_x - 1] = 1
+						temp_res[time][grid_y][grid_x - 1] = hs[time]
 					if on_bottom_line and grid_y > 0:
 						# Check the grid bellow
-						if self.reservations[res_index][grid_y - 1][grid_x] == 1:
+						if self.reservations[res_index][grid_y - 1][grid_x] != -1:
 							collision = True
 							break
-						temp_res[time][grid_y - 1][grid_x] = 1
+						temp_res[time][grid_y - 1][grid_x] = hs[time]
 					if on_left_line and on_left_line and grid_x > 0 and grid_y > 0:
 						# Check the grid bellow and to the left
-						if self.reservations[res_index][grid_y - 1][grid_x - 1] == 1:
+						if self.reservations[res_index][grid_y - 1][grid_x - 1] != -1:
 							collision = True
 							break
-						temp_res[time][grid_y - 1][grid_x - 1] = 1
+						temp_res[time][grid_y - 1][grid_x - 1] = hs[time]
 					# Get the slope of the line
 					delta_x = np.around(end_x - start_x, decimals=7)
 					delta_y = np.around(end_y - start_y, decimals=7)
@@ -291,33 +291,33 @@ class IntersectionManager:
 								# Make sure we are not trying to mark a grid off the intersection
 								if grid_x >= self.grid_length or grid_y >= self.grid_length:
 									break
-								if self.reservations[res_index][grid_y][grid_x - 1] == 1:
+								if self.reservations[res_index][grid_y][grid_x - 1] != -1:
 									collision = True
 									break
-								temp_res[time][grid_y][grid_x - 1] = 1
+								temp_res[time][grid_y][grid_x - 1] = hs[time]
 						else:  # Go up and right
 							grid_x += 1
 							grid_y += 1
 							# Make sure we are not trying to mark a grid off the intersection
 							if grid_x >= self.grid_length or grid_y >= self.grid_length:
 								break
-							if self.reservations[res_index][grid_y - 1][grid_x] == 1:
+							if self.reservations[res_index][grid_y - 1][grid_x] != -1:
 								collision = True
 								break
-							if self.reservations[res_index][grid_y][grid_x - 1] == 1:
+							if self.reservations[res_index][grid_y][grid_x - 1] != -1:
 								collision = True
 								break
-							temp_res[time][grid_y - 1][grid_x] = 1
-							temp_res[time][grid_y][grid_x - 1] = 1
+							temp_res[time][grid_y - 1][grid_x] = hs[time]
+							temp_res[time][grid_y][grid_x - 1] = hs[time]
 						# Make sure we are not trying to mark a grid off the intersection
 						if grid_x >= self.grid_length or grid_y >= self.grid_length:
 							break
 						# Check if it is already occupied
-						if self.reservations[res_index][grid_y][grid_x] == 1:
+						if self.reservations[res_index][grid_y][grid_x] != -1:
 							collision = True
 							break
 						# Set the grid square to occupied
-						temp_res[time][grid_y][grid_x] = 1
+						temp_res[time][grid_y][grid_x] = hs[time]
 						# Get the next reference point
 						check_x = (grid_x + 1) * self.grid_size
 						check_y = (grid_y + 1) * self.grid_size
@@ -343,11 +343,11 @@ class IntersectionManager:
 					if grid_y < 0 or grid_y >= self.grid_length:
 						continue
 					# Check if it is already occupied
-					if self.reservations[res_index][grid_y][grid_x] == 1:
+					if self.reservations[res_index][grid_y][grid_x] != -1:
 						collision = True
 						break
 					# Set the grid square to occupied
-					temp_res[time][grid_y][grid_x] = 1
+					temp_res[time][grid_y][grid_x] = hs[time]
 					check_x = (grid_x + 1) * self.grid_size
 					check_y = grid_y * self.grid_size
 					on_left_line = start_x == (check_x - self.grid_size)
@@ -355,16 +355,16 @@ class IntersectionManager:
 					# Check if the line starts on an edge/corner of a grid square
 					if on_left_line and grid_x > 0:
 						# Check the grid to the left
-						if self.reservations[res_index][grid_y][grid_x - 1] == 1:
+						if self.reservations[res_index][grid_y][grid_x - 1] != -1:
 							collision = True
 							break
-						temp_res[time][grid_y][grid_x - 1] = 1
+						temp_res[time][grid_y][grid_x - 1] = hs[time]
 					if on_bottom_line and grid_y > 0:
 						# Check the grid below
-						if self.reservations[res_index][grid_y - 1][grid_x] == 1:
+						if self.reservations[res_index][grid_y - 1][grid_x] != -1:
 							collision = True
 							break
-						temp_res[time][grid_y - 1][grid_x] = 1
+						temp_res[time][grid_y - 1][grid_x] = hs[time]
 					# Get the slope of the line
 					delta_x = np.around(end_x - start_x, decimals=7)
 					delta_y = np.around(end_y - start_y, decimals=7)
@@ -388,10 +388,10 @@ class IntersectionManager:
 								# Make sure not to mark a grid off the intersection
 								if grid_x >= self.grid_length or grid_y >= self.grid_length:
 									break
-								if self.reservations[res_index][grid_y + 1][grid_x] == 1:
+								if self.reservations[res_index][grid_y + 1][grid_x] != -1:
 									collision = True
 									break
-								temp_res[time][grid_y + 1][grid_x] = 1
+								temp_res[time][grid_y + 1][grid_x] = hs[time]
 						elif temp_m > m:  # Go down
 							grid_y -= 1
 						else:  # Go down and right
@@ -401,23 +401,23 @@ class IntersectionManager:
 							if grid_x >= self.grid_length or grid_y < 0:
 								break
 							# Check the grid squares next to this one
-							if self.reservations[res_index][grid_y + 1][grid_x] == 1:
+							if self.reservations[res_index][grid_y + 1][grid_x] != -1:
 								collision = True
 								break
-							if self.reservations[res_index][grid_y][grid_x - 1] == 1:
+							if self.reservations[res_index][grid_y][grid_x - 1] != -1:
 								collision = True
 								break
-							temp_res[time][grid_y + 1][grid_x] = 1
-							temp_res[time][grid_y][grid_x - 1] = 1
+							temp_res[time][grid_y + 1][grid_x] = hs[time]
+							temp_res[time][grid_y][grid_x - 1] = hs[time]
 						# Make sure we are not trying to mark a grid off the intersection
 						if grid_x >= self.grid_length or grid_y < 0:
 							break
 						# Check if it is already occupied
-						if self.reservations[res_index][grid_y][grid_x] == 1:
+						if self.reservations[res_index][grid_y][grid_x] != -1:
 							collision = True
 							break
 						# Set the grid space to occupied
-						temp_res[time][grid_y][grid_x] = 1
+						temp_res[time][grid_y][grid_x] = hs[time]
 						# Get the next reference point
 						check_x = (grid_x + 1) * self.grid_size
 						check_y = grid_y * self.grid_size
@@ -444,21 +444,21 @@ class IntersectionManager:
 					if grid_y < 0 or grid_y >= self.grid_length:
 						continue
 					# Check if it is already occupied
-					if self.reservations[res_index][grid_y][grid_x] == 1:
+					if self.reservations[res_index][grid_y][grid_x] != -1:
 						collision = True
 						break
 					# Set the grid square to occupied
-					temp_res[time][grid_y][grid_x] = 1
+					temp_res[time][grid_y][grid_x] = hs[time]
 					# Get the reference point
 					check_x = grid_x * self.grid_size
 					check_y = grid_y * self.grid_size
 					# Check if the line is on the edge/corner of a grid square
 					if start_x == check_x and grid_x > 0:
 						# Check the grid to the left
-						if self.reservations[res_index][grid_y][grid_x - 1] == 1:
+						if self.reservations[res_index][grid_y][grid_x - 1] != -1:
 							collision = True
 							break
-						temp_res[time][grid_y][grid_x - 1] = 1
+						temp_res[time][grid_y][grid_x - 1] = hs[time]
 					while check_y >= end_y:
 						grid_y -= 1
 						# Make sure we are not trying to mark a grid off the intersection
@@ -467,16 +467,16 @@ class IntersectionManager:
 						# Check if the line is on the edge of a grid square
 						if start_x == check_x and grid_x > 0:
 							# Check the grid to the left
-							if self.reservations[res_index][grid_y][grid_x - 1] == 1:
+							if self.reservations[res_index][grid_y][grid_x - 1] != -1:
 								collision = True
 								break
-							temp_res[time][grid_y][grid_x - 1] = 1
+							temp_res[time][grid_y][grid_x - 1] = hs[time]
 						# Check if the current grid is already occupied
-						if self.reservations[res_index][grid_y][grid_x] == 1:
+						if self.reservations[res_index][grid_y][grid_x] != -1:
 							collision = True
 							break
 						# Set the grid square to occupied
-						temp_res[time][grid_y][grid_x] = 1
+						temp_res[time][grid_y][grid_x] = hs[time]
 						# Get the next reference point
 						check_x = grid_x * self.grid_size
 						check_y = grid_y * self.grid_size
@@ -502,21 +502,21 @@ class IntersectionManager:
 					if grid_y < 0 or grid_y >= self.grid_length:
 						continue
 					# Check if it is already occupied
-					if self.reservations[res_index][grid_y][grid_x] == 1:
+					if self.reservations[res_index][grid_y][grid_x] != -1:
 						collision = True
 						break
 					# Set the grid square to occupied
-					temp_res[time][grid_y][grid_x] = 1
+					temp_res[time][grid_y][grid_x] = hs[time]
 					# Get the next reference point
 					check_x = grid_x * self.grid_size
 					check_y = grid_y * self.grid_size
 					# Check if the line is on the edge of a grid square
 					if start_y == check_y and grid_y > 0:
 						# Check the grid below
-						if self.reservations[res_index][grid_y - 1][grid_x] == 1:
+						if self.reservations[res_index][grid_y - 1][grid_x] != -1:
 							collision = True
 							break
-						temp_res[time][grid_y - 1][grid_x] = 1
+						temp_res[time][grid_y - 1][grid_x] = hs[time]
 					while check_x >= end_x:
 						grid_x -= 1
 						# Make sure we are not trying to mark a grid off the intersection
@@ -525,16 +525,16 @@ class IntersectionManager:
 						# Check if the line is on the edge of a grid square
 						if start_y == check_y and grid_y > 0:
 							# Check the grid below
-							if self.reservations[res_index][grid_y - 1][grid_x] == 1:
+							if self.reservations[res_index][grid_y - 1][grid_x] != -1:
 								collision = True
 								break
-							temp_res[time][grid_y - 1][grid_x] = 1
+							temp_res[time][grid_y - 1][grid_x] = hs[time]
 						# Check if it is already occupied
-						if self.reservations[res_index][grid_y][grid_x] == 1:
+						if self.reservations[res_index][grid_y][grid_x] != -1:
 							collision = True
 							break
 						# Set the grid square to occupied
-						temp_res[time][grid_y][grid_x] = 1
+						temp_res[time][grid_y][grid_x] = hs[time]
 						# Get the next reference point
 						check_x = grid_x * self.grid_size
 						check_y = grid_y * self.grid_size
