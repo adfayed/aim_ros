@@ -71,9 +71,6 @@ class car:
 				stopping_distance = (dMax - self.x[curr_t_index] - self.length/2)
 			self.vel[curr_t_index] = self.vel[curr_t_index - 1] + self.acc[curr_t_index - 1]*timestep_size
 			if follow_car is None:
-				# if stopping_distance <= dSafe:
-				#     self.acc[curr_t_index] = -10 
-				# else:
 				self.acc[curr_t_index] = (-self.vel[curr_t_index - 1] / (2*stopping_distance/self.vel[curr_t_index - 1]))
 			else:
 				if self.lane_id == 6 or self.lane_id == 7 or self.lane_id == 8: # South lanes
@@ -87,26 +84,12 @@ class car:
 				self.acc[curr_t_index] = (follow_car.vel[f_curr_t_index - 1] - self.vel[curr_t_index - 1])/(2*(car_gap - dSafe)/self.vel[curr_t_index - 1])
 				if car_gap <= 1.5*dSafe:
 					self.acc[curr_t_index] = self.acc[curr_t_index] - math.exp(1.5*dSafe - car_gap)
-					# try:
-					# 	self.acc[curr_t_index] = self.acc[curr_t_index] - math.exp(0.5*dSafe - car_gap)
-					# except OverflowError as err:
-					# 	print "Overflow Error: Something went wrong"
-					# 	self.acc[curr_t_index] = 0
-					# except:
-					# 	type, value, tb = sys.exc_info()
-					# 	traceback.print_exc()
-					# 	last_frame = lambda tb=tb: last_frame(tb.tb_next) if tb.tb_next else tb
-					# 	frame = last_frame().tb_frame
-					# 	ns = dict(frame.f_globals)
-					# 	ns.update(frame.f_locals)
-					# 	code.interact(local=ns)
 				if follow_car.reservation is True:
 					self.acc[curr_t_index] = min((follow_car.vel[f_curr_t_index - 1] - self.vel[curr_t_index - 1])/(2*(car_gap - dSafe)/self.vel[curr_t_index - 1]),
 						(-self.vel[curr_t_index - 1] / (2*stopping_distance/self.vel[curr_t_index - 1])))
 			if self.vel[curr_t_index] <= 2:
 				self.vel[curr_t_index] = 0
 				self.acc[curr_t_index] = 0
-		#return curr_t_index
 
 
 class carManager:
@@ -298,27 +281,6 @@ def main():
 	 10:90,
 	 11:90
 	 }
-	# print("Generating Cars...")
-	# cars_spawned = match_spawn_count(cars_spawned)
-	# print("Generated Cars.\n Running Simulation, this may take a while...")
-	# cm = carManager(cars_spawned)
-	# start_time = time.time()
-
-	# for sim_time in np.arange(0, end_time + timestep_size, timestep_size):
-	# 	sim_time = round(sim_time,3)
-	# 	# if round(sim_time,1).is_integer():
-	# 	# 	print("Simulation time:", round(sim_time,1))
-	# 	cm.update(sim_time)
-
-	# completion_time = time.time() - start_time
-	# print "Simulation Complete \n Execution Time: ", round(completion_time,2), " seconds"
-	# print("Initiating Visualization. Please run Rviz")
-
-	# visualizeSim.main(cm.car_list, dMax, lane_width, timestep_size, end_time)
-	# print("Visualization complete and shutdown successful!")
-
-
-
 
 	rospy.init_node('car_manager')
 	rate = rospy.Rate(100.0)

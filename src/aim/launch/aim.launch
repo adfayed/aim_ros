@@ -1,0 +1,11 @@
+<launch>
+
+	<node pkg="aim" type="IntersectionManagerClass.py" 
+          name="IM" output="screen"/>
+
+	<node pkg="aim" type="carManager.py" 
+          name="CM" output="screen"/>
+
+	<node type="rviz" name="rviz" pkg="rviz" args="-d $(find aim)/rviz/config_file.rviz"/>
+
+</launch>

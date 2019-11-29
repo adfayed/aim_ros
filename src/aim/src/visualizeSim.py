@@ -13,7 +13,7 @@ def main(car_list, dMax, lane_width, timestep_size, end_time):
     car_list = car_list
     end_time = end_time
 
-    rospy.init_node('marker_publisher', disable_signals = True)
+    #rospy.init_node('marker_publisher', disable_signals = True)
     pub = rospy.Publisher('aim_marker_array', MarkerArray, queue_size=100)
     rate = rospy.Rate(1/timestep_size)
 
@@ -277,12 +277,15 @@ def main(car_list, dMax, lane_width, timestep_size, end_time):
                 if marker_temp.id == car_list[i].car_id and car_list[i].t[0] <= viz_time*timestep_size:
                     for j in range(len(car_list[i].t)):
                         if viz_time*timestep_size == round(car_list[i].t[j],2):
-                            marker_temp.pose.position.x = car_list[i].x[j] #+ car_list[i].length/2*math.cos(car_list[i].heading[j])
-                            marker_temp.pose.position.y = car_list[i].y[j] #+ car_list[i].length/2*math.sin(car_list[i].heading[j])
+                            marker_temp.pose.position.x = car_list[i].x[j]
+                            marker_temp.pose.position.y = car_list[i].y[j]
                             marker_temp.pose.orientation = Quaternion(*tf.transformations.quaternion_from_euler(0, 0, float(math.radians(car_list[i].heading[j]))))
                             if car_list[i].follow_car is not None:
                                 marker_temp.color.r = 0.0 
                                 marker_temp.color.b = 1.0
+                        elif viz_time*timestep_size > round(car_list[i].t[-1],2):
+                            marker_temp.pose.position.x = 0
+                            marker_temp.pose.position.y = 0
             marker_array.markers.append(marker_temp)
         pub.publish(marker_array)
         viz_time = viz_time + 1
