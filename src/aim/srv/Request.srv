@@ -6,6 +6,7 @@ float64 y
 float32 heading
 float32 angular_V
 float64 vel
+float64 desired_vel
 float64 acc
 int16 priority
 float32 length

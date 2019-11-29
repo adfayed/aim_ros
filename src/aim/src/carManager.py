@@ -28,6 +28,7 @@ class car:
 		self.heading = heading
 		self.angular_V = angular_V
 		self.vel = vel
+		self.desired_vel = vel[0]
 		self.acc = acc
 		self.length = length
 		self.width = width
@@ -127,9 +128,9 @@ class carManager:
 							break
 					response = car_request_client(self.car_list[i].car_id, self.car_list[i].lane_id, self.car_list[i].t[curr_t_index], 
 						self.car_list[i].x[curr_t_index], self.car_list[i].y[curr_t_index], self.car_list[i].heading[curr_t_index], 
-						self.car_list[i].angular_V, self.car_list[i].vel[curr_t_index], self.car_list[i].acc[curr_t_index], 
-						self.car_list[i].priority, self.car_list[i].length, self.car_list[i].width, self.car_list[i].max_V, 
-						self.car_list[i].max_A, self.car_list[i].min_A, self.car_list[i].max_lateral_g)
+						self.car_list[i].angular_V, self.car_list[i].vel[curr_t_index], self.car_list[i].desired_vel,
+						self.car_list[i].acc[curr_t_index],	self.car_list[i].priority, self.car_list[i].length, self.car_list[i].width,
+						self.car_list[i].max_V,	self.car_list[i].max_A, self.car_list[i].min_A, self.car_list[i].max_lateral_g)
 					if response[0]:
 						print("Request accepted for Car: ",self.car_list[i].car_id," At time: ",time)
 						self.car_list[i].reservation = response[0]
@@ -170,13 +171,13 @@ class carManager:
 
 
 # This is the client's fuction sending a car's info to the server (intersectionManager.py service) as a request to pass
-def car_request_client(car_id, lane_id, t, x, y, heading, angular_V, vel, acc, priority, length, width, max_V, max_A, min_A, max_lateral_g):
+def car_request_client(car_id, lane_id, t, x, y, heading, angular_V, vel, desired_vel, acc, priority, length, width, max_V, max_A, min_A, max_lateral_g):
 	rospy.wait_for_service('car_request')
 	# print(car_id, lane_id, t, x, y, heading, angular_V, vel, acc, priority, length, width, max_V, max_A, min_A, max_lateral_g)
 	try:
 		car_request = rospy.ServiceProxy('car_request', Request)
 		# resp_success, resp_x, resp_y, resp_heading, resp_vel, resp_t = car_request(car_id, int(lane_id), t, x, y, heading, angular_V, vel, acc, priority, length, width, max_V, max_A, min_A, max_lateral_g) 
-		response = car_request(car_id, int(lane_id), t, x, y, heading, angular_V, vel, acc, priority, length, width, max_V, max_A, min_A, max_lateral_g) 
+		response = car_request(car_id, int(lane_id), t, x, y, heading, angular_V, vel, desired_vel, acc, priority, length, width, max_V, max_A, min_A, max_lateral_g) 
 		# print ("Request has returned ", resp1, " for car_id: ", car_id, ", lane_id: ", lane_id, ", t: ", t, ", x: ", x, ", y:", y, ", heading: ", heading, 
 		# 	", angular_V: ", angular_V, ", vel: ", vel, ", acc: ", acc)
 		# resp = (resp_success, resp_x, resp_y, resp_heading, resp_vel, resp_t)

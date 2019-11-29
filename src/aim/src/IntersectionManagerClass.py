@@ -103,12 +103,15 @@ class IntersectionManager:
 			# print "Car's x: ",car.x
 			# print "Car's y: ",car.y
 			success, xs, ys, headings, vs, ts = self.__detectCollisions(car, max(min_v,car.vel))
-			# success, xs, ys, headings, vs, ts = self.__detectCollisions(car, car.desired_velo)
+			# success, xs, ys, headings, vs, ts = self.__detectCollisions(car, car.desired_vel)
 		elif self.policy == 1:
 			success, xs, ys, headings, vs, ts = self.__dresnerStonePolicy(car)
 		elif self.policy == 2:
 			success, xs, ys, headings, vs, ts = self.__trafficLightPolicy(car)
 		elif self.policy == 3:
+			print "Car's velocity: ",car.vel
+			print "Car's x: ",car.x
+			print "Car's y: ",car.y
 			success, xs, ys, headings, vs, ts = self.__stopSignPolicy(car)
 		else:
 			success = False
@@ -568,7 +571,7 @@ class IntersectionManager:
 				  ts = list of timesteps over the path
 		"""
 		min_v = 10
-		success, xs, ys, headings, vs, ts = self.__detectCollisions(car, car.max_v)
+		success, xs, ys, headings, vs, ts = self.__detectCollisions(car, car.max_V)
 		if not success:
 			success, xs, ys, headings, vs, ts = self.__detectCollisions(car, max(min_v, car.vel))
 		return success, xs, ys, headings, vs, ts
@@ -613,18 +616,18 @@ class IntersectionManager:
 		# When car requests:
 		if car.lane_id in lanes:		# Car is in the lane that is green
 			if not self.conflict:		# No conflict so check the request
-				success, xs, ys, hs, vs, ts = self.__detectCollisions(car, car.desired_velo)
+				success, xs, ys, hs, vs, ts = self.__detectCollisions(car, car.desired_vel)
 				self.time_to_change = max(self.time_to_change, self.__getExitTime(car))
 				if success:
 					exit_time = self.__getExitTime(car)
 					self.time_to_change = max(self.time_to_change, exit_time)
-				return success. xs. ys, hs, vs, ts
+				return success, xs, ys, hs, vs, ts
 			else:		# Conflict so see if the car can still make it through
 				exit_time = self.__getExitTime(car)
 				if exit_time > self.time_to_change:		# The car cannot make it through the intersection
 					return success, xs, ys, hs, vs, ts
 				else:
-					success, xs, ys, hs, vs, ts = self.__detectCollisions(car, car.desired_velo)
+					success, xs, ys, hs, vs, ts = self.__detectCollisions(car, car.desired_vel)
 					return success, xs, ys, hs, vs, ts
 		else:		# Car is not in the lane that is green
 			if car.t >= self.time_to_change:		# It is past the time to change the light
@@ -658,7 +661,7 @@ class IntersectionManager:
 						break
 				self.time_to_change = car.t + min(min_green_time, max_green_time)
 				if car.lane_id in lanes:		# The car is in the lane that is green
-					success, xs, ys, hs, vs, ts = self.__detectCollisions(car, car.desired_velo)
+					success, xs, ys, hs, vs, ts = self.__detectCollisions(car, car.desired_vel)
 					self.conflict = False
 					self.time_to_change = max(self.time_to_change, self.__getExitTime(car))
 					if success:
@@ -694,7 +697,7 @@ class IntersectionManager:
 			travel_distance += self.dMax - (self.intersection_size - car.x)
 
 		# Calculate how long it will take to travel
-		time = (travel_distance * 2) / (car.desired_velo + car.vel)
+		time = (travel_distance * 2) / (car.desired_vel + car.vel)
 		exit_time = car.t + time
 		return exit_time
 
@@ -736,12 +739,13 @@ class IntersectionManager:
 		else:
 			stop_x = -1
 			stop_y = -1
-		if car.x != stop_x or car.y != stop_y:
+		if abs(car.x - stop_x) >= stop_x * 0.01 or abs(car.y - stop_y) >= stop_y * 0.01:
+		# if car.x != stop_x or car.y != stop_y:
 			success = False
 			return success, xs, ys, hs, vs, ts
 
 		# Check if the car is clear
-		return self.__detectCollisions(car, car.max_v)
+		return self.__detectCollisions(car, car.max_V)
 
 
 	def __createTrajectory(self, car, desired_velo):
