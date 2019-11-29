@@ -57,12 +57,12 @@ class IntersectionManager:
 		self.service = rospy.Service('car_request', Request, self.handle_car_request)
 
 	def handle_car_request(self, req):
-		print "Received a request with ID: ",req.car_id, " in lane: ",req.lane_id
+		# print "Received a request with ID: ",req.car_id, " in lane: ",req.lane_id
 		# print "Requested car's info [%s  %s  %s  %s  %s %s %s  %s %s %s]"%(req.car_id, req.lane_id, req.priority, req.t, req.x, req.y, req.heading, req.angular_V, req.vel, req.acc)
 		successfully_scheduled, xs, ys, hs, vs, ts = self.__schedule(req)
 		# return successfully_scheduled, xs, ys, hs, vs, ts
-		print "\rReturning the request with ID: ", req.car_id, " in lane: ",req.lane_id
-		sys.stdout.flush()
+		# print "\rReturning the request with ID: ", req.car_id, " in lane: ",req.lane_id
+		# sys.stdout.flush()
 		return RequestResponse(successfully_scheduled, xs, ys, hs, vs, ts)
 
 	def __schedule(self, car):
@@ -81,7 +81,7 @@ class IntersectionManager:
 		if time == 0:
 			time = 1000
 		T_old = int(time - 1)
-		self.reservations[T_old] = np.zeros((self.grid_length, self.grid_length))
+		self.reservations[T_old] = np.full((self.grid_length, self.grid_length), -1)
 
 		lane = car.lane_id		# Get the lane of the car
 		car_id = car.car_id		# Get the car's id
@@ -109,9 +109,9 @@ class IntersectionManager:
 		elif self.policy == 2:
 			success, xs, ys, headings, vs, ts = self.__trafficLightPolicy(car)
 		elif self.policy == 3:
-			print "Car's velocity: ",car.vel
-			print "Car's x: ",car.x
-			print "Car's y: ",car.y
+			# print "Car's velocity: ",car.vel
+			# print "Car's x: ",car.x
+			# print "Car's y: ",car.y
 			success, xs, ys, headings, vs, ts = self.__stopSignPolicy(car)
 		else:
 			success = False
