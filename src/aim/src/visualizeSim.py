@@ -262,7 +262,7 @@ def main(car_list, dMax, lane_width, timestep_size, end_time):
         marker.color.r = 1.0
         marker.color.g = 0.0
         marker.color.b = 0.0
-        marker.pose.orientation = Quaternion(*tf.transformations.quaternion_from_euler(0, 0, float(math.radians(i.heading[0]))))
+        marker.pose.orientation = Quaternion(*tf.transformations.quaternion_from_euler(0, 0, float(math.radians(-i.heading[0]))))
         marker.pose.position.x = 0
         marker.pose.position.y = 0
         marker.pose.position.z = 0
@@ -279,7 +279,7 @@ def main(car_list, dMax, lane_width, timestep_size, end_time):
                         if viz_time*timestep_size == round(car_list[i].t[j],2):
                             marker_temp.pose.position.x = car_list[i].x[j]
                             marker_temp.pose.position.y = car_list[i].y[j]
-                            marker_temp.pose.orientation = Quaternion(*tf.transformations.quaternion_from_euler(0, 0, float(math.radians(car_list[i].heading[j]))))
+                            marker_temp.pose.orientation = Quaternion(*tf.transformations.quaternion_from_euler(0, 0, float(math.radians(-car_list[i].heading[j]))))
                             if car_list[i].follow_car is not None:
                                 marker_temp.color.r = 0.0 
                                 marker_temp.color.b = 1.0
