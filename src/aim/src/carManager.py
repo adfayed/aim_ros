@@ -16,7 +16,7 @@ import traceback, sys, code
 # Class for each car's attr
 class car:
 	def __init__(self, car_id, lane_id, t, x, y, heading, angular_V, vel, acc, following = False, reservation = False, priority = 0,
-		length = 4.9784, width = 1.96342, max_V = 249.448, max_A = 43.47826087, min_A = 43.47826087, 
+		length = 4.9784, width = 1.96342, max_V = 69.29, max_A = 43.47826087, min_A = -43.47826087, 
 		max_lateral_g = 1.2):
 		self.following = following # For visualization purposes
 		self.car_id = car_id
@@ -44,7 +44,7 @@ class car:
 
 
 	def _update(self, curr_t_index, follow_car = None , f_curr_t_index = None):
-		if self.reservation is True:
+		if self.reservation.any() == True:
 			# Follow x, y, heading, vel given by IM
 			pass
 		else:
@@ -86,7 +86,6 @@ class car:
 				if car_gap <= 1.5*dSafe:
 					try:
 						self.acc[curr_t_index] = self.acc[curr_t_index] - math.exp(1.5*dSafe - car_gap)
-						print("Tried Hard Braking! New acc: ",self.acc[curr_t_index])
 					except OverflowError as err:
 						self.acc[curr_t_index] = self.acc[curr_t_index] - 5
 				if follow_car.reservation[f_curr_t_index] == True:
@@ -243,9 +242,9 @@ def main():
 	np.random.seed(1)
 	global x_states, y_states, h_states, timestep_size, num_cars, tSafe, time_to_complete, end_time, dMax, dSafe, lane_width
 	timestep_size = 0.1 # Must be a float
-	num_cars = 80.0 # Must be a float
+	num_cars = 120.0 # Must be a float
 	tSafe = 0.2 # Must be a float
-	time_to_complete = 50.0 # Must be a float
+	time_to_complete = 30.0 # Must be a float
 	end_time = 100.0 # Must be a float
 	cars_spawned = []
 	dMax = 148 
