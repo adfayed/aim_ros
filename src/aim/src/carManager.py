@@ -15,10 +15,10 @@ import traceback, sys, code
 
 # Class for each car's attr
 class car:
-	def __init__(self, car_id, lane_id, t, x, y, heading, angular_V, vel, acc, priority = 0,
+	def __init__(self, car_id, lane_id, t, x, y, heading, angular_V, vel, acc, following = False, reservation = False, priority = 0,
 		length = 4.9784, width = 1.96342, max_V = 249.448, max_A = 43.47826087, min_A = 43.47826087, 
-		max_lateral_g = 1.2 , reservation = False):
-		self.follow_car = None # For visualization purposes
+		max_lateral_g = 1.2):
+		self.following = following # For visualization purposes
 		self.car_id = car_id
 		self.lane_id = lane_id
 		self.priority = priority
@@ -82,11 +82,19 @@ class car:
 				elif self.lane_id == 9 or self.lane_id == 10 or self.lane_id == 11: # West lanes
 					car_gap = (follow_car.x[f_curr_t_index] - follow_car.length/2) - (self.x[curr_t_index] + self.length/2)
 				self.acc[curr_t_index] = (follow_car.vel[f_curr_t_index - 1] - self.vel[curr_t_index - 1])/(2*(car_gap - dSafe)/self.vel[curr_t_index - 1])
+				self.following[curr_t_index] = True # For visualization purposes
 				if car_gap <= 1.5*dSafe:
-					self.acc[curr_t_index] = self.acc[curr_t_index] - math.exp(1.5*dSafe - car_gap)
-				if follow_car.reservation is True:
-					self.acc[curr_t_index] = min((follow_car.vel[f_curr_t_index - 1] - self.vel[curr_t_index - 1])/(2*(car_gap - dSafe)/self.vel[curr_t_index - 1]),
-						(-self.vel[curr_t_index - 1] / (2*stopping_distance/self.vel[curr_t_index - 1])))
+					try:
+						self.acc[curr_t_index] = self.acc[curr_t_index] - math.exp(1.5*dSafe - car_gap)
+						print("Tried Hard Braking! New acc: ",self.acc[curr_t_index])
+					except OverflowError as err:
+						self.acc[curr_t_index] = self.acc[curr_t_index] - 5
+				if follow_car.reservation[f_curr_t_index] == True:
+					follow_acc = (follow_car.vel[f_curr_t_index - 1] - self.vel[curr_t_index - 1])/(2*(car_gap - dSafe)/self.vel[curr_t_index - 1])
+					stopping_acc = (-self.vel[curr_t_index - 1] / (2*stopping_distance/self.vel[curr_t_index - 1]))
+					self.acc[curr_t_index] = min(follow_acc, stopping_acc)
+					if stopping_acc < follow_acc:
+						self.following[curr_t_index] = False # For visualization purposes
 			if self.vel[curr_t_index] <= 2:
 				self.vel[curr_t_index] = 0
 				self.acc[curr_t_index] = 0
@@ -99,7 +107,7 @@ class carManager:
 	def update(self, time):
 		time = round(time, 3)
 		for i in range(0,len(self.car_list)):
-			if self.car_list[i].reservation: 
+			if self.car_list[i].reservation.any(): 
 				continue
 			else:
 				curr_t_index = None
@@ -116,7 +124,7 @@ class carManager:
 						self.car_list[i].max_V,	self.car_list[i].max_A, self.car_list[i].min_A, self.car_list[i].max_lateral_g)
 					if response[0]:
 						print("Request accepted for Car: ",self.car_list[i].car_id," At time: ",time)
-						self.car_list[i].reservation = response[0]
+						self.car_list[i].reservation = np.append(self.car_list[i].reservation[0:curr_t_index], np.ones(len(response[1]),dtype=bool))
 						# self.car_list[i].x = self.car_list[i].x[0:curr_t_index].append(response[1])
 						self.car_list[i].x = np.append(self.car_list[i].x[0:curr_t_index], response[1])
 						# self.car_list[i].y = self.car_list[i].y[0:curr_t_index].append(response[2])
@@ -146,7 +154,6 @@ class carManager:
 										break
 								if f_curr_t_index == None:
 									follow_car = None
-								self.car_list[i].follow_car = self.car_list[j] # For visualization purposes
 								break
 						self.car_list[i]._update(curr_t_index+1, follow_car, f_curr_t_index)
 				else:
@@ -199,10 +206,10 @@ def match_spawn_count(cars_spawned, linearly = True):
 					print ("Not enough free lanes, the rest of the needed cars will attempt to spawn next timestep.")
 				rand_car_lanes = np.random.choice(free_lanes, new_spawns, replace=False)
 				for lane in rand_car_lanes:
-					x, y, heading, vel, acc = init_state(t, lane)
+					x, y, heading, vel, acc, foll, reserv = init_state(t, lane)
 					vel[0] = (spawn_vel_range[1] - spawn_vel_range[0])*np.random.random_sample() + spawn_vel_range[0]
 					acc[0] = -vel[0] / (2*dMax/vel[0])
-					cars_spawned.append(car(car_id, lane, np.arange(t, end_time + timestep_size, timestep_size), x, y, heading, 0, vel, acc))
+					cars_spawned.append(car(car_id, lane, np.arange(t, end_time + timestep_size, timestep_size), x, y, heading, 0, vel, acc, foll, reserv))
 					car_id = car_id + 1
 	return cars_spawned
 
@@ -223,10 +230,12 @@ def init_state(t, lane):
 	h = np.arange(t, end_time + timestep_size, timestep_size)
 	vel = np.arange(t, end_time + timestep_size, timestep_size)
 	acc = np.arange(t, end_time + timestep_size, timestep_size)
+	following = np.zeros(len(x), dtype=bool)
+	reservation = np.zeros(len(x), dtype=bool)
 	x[0] = x_states[lane]
 	y[0] = y_states[lane]
 	h[0] = h_states[lane]
-	return x, y, h, vel, acc
+	return x, y, h, vel, acc, following, reservation
 
 def main():
 	warnings.filterwarnings("ignore")
@@ -234,7 +243,7 @@ def main():
 	np.random.seed(1)
 	global x_states, y_states, h_states, timestep_size, num_cars, tSafe, time_to_complete, end_time, dMax, dSafe, lane_width
 	timestep_size = 0.1 # Must be a float
-	num_cars = 40.0 # Must be a float
+	num_cars = 80.0 # Must be a float
 	tSafe = 0.2 # Must be a float
 	time_to_complete = 50.0 # Must be a float
 	end_time = 100.0 # Must be a float
