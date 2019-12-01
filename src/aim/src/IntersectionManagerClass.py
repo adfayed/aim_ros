@@ -102,8 +102,8 @@ class IntersectionManager:
 			# print "Car's velocity: ",car.vel
 			# print "Car's x: ",car.x
 			# print "Car's y: ",car.y
-			success, xs, ys, headings, vs, ts = self.__detectCollisions(car, max(min_v,car.vel))
-			# success, xs, ys, headings, vs, ts = self.__detectCollisions(car, car.desired_vel)
+			success, xs, ys, headings, vs, ts = self.__ourPolicy(car, max(min_v,car.vel))
+			# success, xs, ys, headings, vs, ts = self.__ourPolicy(car, car.desired_vel)
 		elif self.policy == 1:
 			success, xs, ys, headings, vs, ts = self.__dresnerStonePolicy(car)
 		elif self.policy == 2:
@@ -134,866 +134,115 @@ class IntersectionManager:
 		return success, xs, ys, headings, vs, ts
 
 	def __ourPolicy(self, car, desired_velo):
-		"""
-        :param car = the car we will look at to see if the reservation can be accepted
-        :returns: A tuple representing the trajectory.
-                  Success = true or false indicating if the reservation is accepted or not
-                  xs = list of x-coordinates over the path
-                  ys = list of y-coordinates over the path
-                  hs = list of headings over the path
-                  vs = list of velocities over the path
-                  ts = list of timesteps over the path
-        """
-		# Get the trajectory along the path if the car maintains its velocity
-		# print "\rDetecting collision for car: ",car.car_id,
-		# sys.stdout.flush()
-		xs, ys, hs, vs, ts = self.__createTrajectory(car, desired_velo)
-		# print "\rCreated trajectory for car: ",car.car_id,
-		# sys.stdout.flush()
-		car_w = car.width
-		car_l = car.length
+		# First check the path using the desired_velo
+		xs, ys, hs, vs, ts = self.__createFullTrajectory(car, desired_velo)
+		collision, col_time_index, col_counter, col_direction, col_temp_res, col_indices = self.__collisionDetection(xs, ys, hs, ts, car)
 
-		# Calculate the initial bounding box
-		box = np.array([[[xs[0] - (car_w / 2)],
-						 [ys[0] + (car_l / 2)],
-						 [1]],
-						[[xs[0] + (car_w / 2)],
-						 [ys[0] + (car_l / 2)],
-						 [1]],
-						[[xs[0] - (car_w / 2)],
-						 [ys[0] - (car_l / 2)],
-						 [1]],
-						[[xs[0] + (car_w / 2)],
-						 [ys[0] - (car_l / 2)],
-						 [1]]])
-		# Rotate so heading in correct direction
-		T = np.array([[1, 0, -xs[0]],
-					  [0, 1, -ys[0]],
-					  [0, 0, 1]])
-		R = np.array([[np.cos(np.radians(-hs[0])), -np.sin(np.radians(-hs[0])), 0],
-					  [np.sin(np.radians(-hs[0])), np.cos(np.radians(-hs[0])), 0],
-					  [0, 0, 1]])
-		R = np.around(R, decimals=10)
-		for b in range(4):
-			box[b] = np.dot(np.dot(np.dot(np.linalg.inv(T), R), T), box[b])
-
-		temp_res = np.full((len(ts), self.grid_length, self.grid_length), -1)  # Hold the temp grids
-		indices = [i for i in range(len(ts))]  # Hold the index of reservations the grid in temp_res came from
-		collision = False
-
-		# Check for collisions at each time
-		for time in range(len(ts)):
-			# Get the index of the grid in reservations
-			res_index = int((ts[time] * 10) % 1000)
-			temp_res[time] = self.reservations[res_index]  # Copy the grid
-			indices[time] = res_index  # Save the index
-
-			# Update the position of the bounding box
-			if time > 0:
-				delta_x = xs[time] - xs[time - 1]
-				delta_y = ys[time] - ys[time - 1]
-				delta_h = hs[time] - hs[time - 1]
-				T = np.array([[1, 0, delta_x],
-							  [0, 1, delta_y],
-							  [0, 0, 1]])
-				# Translate the box to the new position
-				for b in range(4):
-					box[b] = T.dot(box[b])
-				# Rotate the box if needed
-				if delta_h != 0:
-					T = np.array([[1, 0, -xs[time]],
-								  [0, 1, -ys[time]],
-								  [0, 0, 1]])
-					R = np.array([[np.cos(np.radians(-delta_h)), -np.sin(np.radians(-delta_h)), 0],
-								  [np.sin(np.radians(-delta_h)), np.cos(np.radians(-delta_h)), 0],
-								  [0, 0, 1]])
-					R = np.around(R, decimals=10)
-					for b in range(4):
-						box[b] = np.dot(np.dot(np.dot(np.linalg.inv(T), R), T), box[b])
-
-			mode = 0
-			if box.min() < 0:
-				mode = 1
-			points = [0, 1, 2, 3]
-			col_counter = [0, 0, 0, 0]
-			c_pos = [1, 3, 0, 2]
-			if hs[time] >= 0 and hs[time] < 90:
-				points = [2, 0, 3, 1]
-				c_pos = [0, 2, 3, 1]
-			elif hs[time] >= 90 and hs[time] < 180:
-				points = [3, 2, 1, 0]
-				c_pos = [3, 1, 2, 0]
-			elif hs[time] >= 180 and hs[time] < 270:
-				points = [1, 3, 0, 2]
-				c_pos = [2, 0, 1, 3]
-
-			draw_line = 0
-			# Draw positive sloped lines left-right/bottom-top
-			if mode == 0:
-				# Positive sloped lines
-				for j in [0, 2]:
-					# Get the starting and ending x, y coords
-					start_x = np.around(box[points[j]][0][0], decimals=10)
-					start_y = np.around(box[points[j]][1][0], decimals=10)
-					end_x = np.around(box[points[j + 1]][0][0], decimals=10)
-					end_y = np.around(box[points[j + 1]][1][0], decimals=10)
-					# Get the starting grid coords
-					grid_x = int(math.floor(start_x / self.grid_size))
-					grid_y = int(math.floor(start_y / self.grid_size))
-					# Check that the grid position is valid
-					if grid_x < 0 or grid_x >= self.grid_length:
-						continue
-					elif grid_y < 0 or grid_y >= self.grid_length:
-						continue
-					# Check if it is already occupied
-					if self.reservations[res_index][grid_y][grid_x] != -1:
-						collision = True
-						col_counter[c_pos[line]] += 1
-					# Set the grid square to occupied
-					temp_res[time][grid_y][grid_x] = hs[time]
-					# Get the next reference point
-					check_x = (grid_x + 1) * self.grid_size
-					check_y = (grid_y + 1) * self.grid_size
-					on_left_line = start_x == (check_x - self.grid_size)
-					on_bottom_line = start_y == (check_y - self.grid_size)
-					# Check if the line starts on an edge/corner of a grid square
-					if on_left_line and grid_x > 0:
-						# Check the grid to the left
-						if self.reservations[res_index][grid_y][grid_x - 1] != -1:
-							collision = True
-							col_counter[c_pos[line]] += 1
-						temp_res[time][grid_y][grid_x - 1] = hs[time]
-					if on_bottom_line and grid_y > 0:
-						# Check the grid bellow
-						if self.reservations[res_index][grid_y - 1][grid_x] != -1:
-							collision = True
-							col_counter[c_pos[line]] += 1
-						temp_res[time][grid_y - 1][grid_x] = hs[time]
-					if on_left_line and on_left_line and grid_x > 0 and grid_y > 0:
-						# Check the grid bellow and to the left
-						if self.reservations[res_index][grid_y - 1][grid_x - 1] != -1:
-							collision = True
-							col_counter[c_pos[line]] += 1
-						temp_res[time][grid_y - 1][grid_x - 1] = hs[time]
-					# Get the slope of the line
-					delta_x = np.around(end_x - start_x, decimals=7)
-					delta_y = np.around(end_y - start_y, decimals=7)
-					if delta_x == 0:
-						m = float("inf")
-					else:
-						m = np.around(delta_y / delta_x, decimals=10)
-					while check_x <= end_x or check_y <= end_y:
-						# Get the slope to the reference point
-						delta_x = np.around(check_x - start_x, decimals=7)
-						delta_y = np.around(check_y - start_y, decimals=7)
-						if delta_x == 0:
-							temp_m = float("inf")
-						else:
-							temp_m = np.around(delta_y / delta_x, decimals=10)
-						# Update the grid coords
-						if temp_m > m:  # Go right
-							grid_x += 1
-						elif temp_m < m:  # Go up
-							grid_y += 1
-							# Check the grid to the left if the line is on the grid line
-							if m == float("inf") and start_x == check_x - self.grid_size and grid_x > 0:
-								# Make sure we are not trying to mark a grid off the intersection
-								if grid_x >= self.grid_length or grid_y >= self.grid_length:
-									break
-								if self.reservations[res_index][grid_y][grid_x - 1] != -1:
-									collision = True
-									col_counter[c_pos[line]] += 1
-								temp_res[time][grid_y][grid_x - 1] = hs[time]
-						else:  # Go up and right
-							grid_x += 1
-							grid_y += 1
-							# Make sure we are not trying to mark a grid off the intersection
-							if grid_x >= self.grid_length or grid_y >= self.grid_length:
-								break
-							if self.reservations[res_index][grid_y - 1][grid_x] != -1:
-								collision = True
-								col_counter[c_pos[line]] += 1
-							if self.reservations[res_index][grid_y][grid_x - 1] != -1:
-								collision = True
-								col_counter[c_pos[line]] += 1
-							temp_res[time][grid_y - 1][grid_x] = hs[time]
-							temp_res[time][grid_y][grid_x - 1] = hs[time]
-						# Make sure we are not trying to mark a grid off the intersection
-						if grid_x >= self.grid_length or grid_y >= self.grid_length:
-							break
-						# Check if it is already occupied
-						if self.reservations[res_index][grid_y][grid_x] != -1:
-							collision = True
-							col_counter[c_pos[line]] += 1
-						# Set the grid square to occupied
-						temp_res[time][grid_y][grid_x] = hs[time]
-						# Get the next reference point
-						check_x = (grid_x + 1) * self.grid_size
-						check_y = (grid_y + 1) * self.grid_size
-					# if collision:
-					# 	break
-					line += 1
-				# Stop if there was a collision
-				# if collision:
-				# 	break
-
-				# Negative sloped lines
-				for j in [0, 1]:
-					# Get the starting and ending x, y coords
-					start_x = np.around(box[points[j]][0][0], decimals=10)
-					start_y = np.around(box[points[j]][1][0], decimals=10)
-					end_x = np.around(box[points[j + 2]][0][0], decimals=10)
-					end_y = np.around(box[points[j + 2]][1][0], decimals=10)
-					# Get the starting grid coords
-					grid_x = int(math.floor(start_x / self.grid_size))
-					grid_y = int(math.floor(start_y / self.grid_size))
-					# Check if the grid position is valid
-					if grid_x < 0 or grid_x >= self.grid_length:
-						continue
-					if grid_y < 0 or grid_y >= self.grid_length:
-						continue
-					# Check if it is already occupied
-					if self.reservations[res_index][grid_y][grid_x] != -1:
-						collision = True
-						col_counter[c_pos[line]] += 1
-					# Set the grid square to occupied
-					temp_res[time][grid_y][grid_x] = hs[time]
-					check_x = (grid_x + 1) * self.grid_size
-					check_y = grid_y * self.grid_size
-					on_left_line = start_x == (check_x - self.grid_size)
-					on_bottom_line = start_y == check_y
-					# Check if the line starts on an edge/corner of a grid square
-					if on_left_line and grid_x > 0:
-						# Check the grid to the left
-						if self.reservations[res_index][grid_y][grid_x - 1] != -1:
-							collision = True
-							col_counter[c_pos[line]] += 1
-						temp_res[time][grid_y][grid_x - 1] = hs[time]
-					if on_bottom_line and grid_y > 0:
-						# Check the grid below
-						if self.reservations[res_index][grid_y - 1][grid_x] != -1:
-							collision = True
-							col_counter[c_pos[line]] += 1
-						temp_res[time][grid_y - 1][grid_x] = hs[time]
-					# Get the slope of the line
-					delta_x = np.around(end_x - start_x, decimals=7)
-					delta_y = np.around(end_y - start_y, decimals=7)
-					if delta_x == 0:
-						m = -float("inf")
-					else:
-						m = np.around(delta_y / delta_x, decimals=10)
-					while check_x <= end_x or check_y >= end_y:
-						# Get the slope to the reference point
-						delta_x = np.around(check_x - start_x, decimals=7)
-						delta_y = np.around(check_y - start_y, decimals=7)
-						if delta_x == 0:
-							temp_m = float("inf")
-						else:
-							temp_m = np.around(delta_y / delta_x, decimals=10)
-						# Update grid coords
-						if temp_m < m:  # Go right
-							grid_x += 1
-							# Check the grid square above, if the line is on the grid line
-							if m == 0 and start_y == check_y + self.grid_size:
-								# Make sure not to mark a grid off the intersection
-								if grid_x >= self.grid_length or grid_y >= self.grid_length:
-									break
-								if self.reservations[res_index][grid_y + 1][grid_x] != -1:
-									collision = True
-									col_counter[c_pos[line]] += 1
-								temp_res[time][grid_y + 1][grid_x] = hs[time]
-						elif temp_m > m:  # Go down
-							grid_y -= 1
-						else:  # Go down and right
-							grid_x += 1
-							grid_y -= 1
-							# Make sure we are not trying to mark a grid off the intersection
-							if grid_x >= self.grid_length or grid_y < 0:
-								break
-							# Check the grid squares next to this one
-							if self.reservations[res_index][grid_y + 1][grid_x] != -1:
-								collision = True
-								col_counter[c_pos[line]] += 1
-							if self.reservations[res_index][grid_y][grid_x - 1] != -1:
-								collision = True
-								col_counter[c_pos[line]] += 1
-							temp_res[time][grid_y + 1][grid_x] = hs[time]
-							temp_res[time][grid_y][grid_x - 1] = hs[time]
-						# Make sure we are not trying to mark a grid off the intersection
-						if grid_x >= self.grid_length or grid_y < 0:
-							break
-						# Check if it is already occupied
-						if self.reservations[res_index][grid_y][grid_x] != -1:
-							collision = True
-							col_counter[c_pos[line]] += 1
-						# Set the grid space to occupied
-						temp_res[time][grid_y][grid_x] = hs[time]
-						# Get the next reference point
-						check_x = (grid_x + 1) * self.grid_size
-						check_y = grid_y * self.grid_size
-					# if collision:
-					# 	break
-					line += 1
-				# Stop if there was a collision
-				if collision:
-					break
-			# Draw positive sloped lines right-left/top-bottom
-			else:
-				# Vertical lines
-				for j in [1, 3]:
-					# Get the starting and ending x, y coords
-					start_x = np.around(box[points[j]][0][0], decimals=10)
-					start_y = np.around(box[points[j]][1][0], decimals=10)
-					end_x = np.around(box[points[j - 1]][0][0], decimals=10)
-					end_y = np.around(box[points[j - 1]][1][0], decimals=10)
-					# Get the starting grid coords
-					grid_x = int(math.floor(start_x / self.grid_size))
-					grid_y = int(math.floor(start_y / self.grid_size))
-					# Check that the grid position is valid
-					if grid_x < 0 or grid_x >= self.grid_length:
-						continue
-					if grid_y < 0 or grid_y >= self.grid_length:
-						continue
-					# Check if it is already occupied
-					if self.reservations[res_index][grid_y][grid_x] != -1:
-						collision = True
-						col_counter[c_pos[line]] += 1
-					# Set the grid square to occupied
-					temp_res[time][grid_y][grid_x] = hs[time]
-					# Get the reference point
-					check_x = grid_x * self.grid_size
-					check_y = grid_y * self.grid_size
-					# Check if the line is on the edge/corner of a grid square
-					if start_x == check_x and grid_x > 0:
-						# Check the grid to the left
-						if self.reservations[res_index][grid_y][grid_x - 1] != -1:
-							collision = True
-							col_counter[c_pos[line]] += 1
-						temp_res[time][grid_y][grid_x - 1] = hs[time]
-					while check_y >= end_y:
-						grid_y -= 1
-						# Make sure we are not trying to mark a grid off the intersection
-						if grid_y < 0:
-							break
-						# Check if the line is on the edge of a grid square
-						if start_x == check_x and grid_x > 0:
-							# Check the grid to the left
-							if self.reservations[res_index][grid_y][grid_x - 1] != -1:
-								collision = True
-								col_counter[c_pos[line]] += 1
-							temp_res[time][grid_y][grid_x - 1] = hs[time]
-						# Check if the current grid is already occupied
-						if self.reservations[res_index][grid_y][grid_x] != -1:
-							collision = True
-							col_counter[c_pos[line]] += 1
-						# Set the grid square to occupied
-						temp_res[time][grid_y][grid_x] = hs[time]
-						# Get the next reference point
-						check_x = grid_x * self.grid_size
-						check_y = grid_y * self.grid_size
-					# if collision:
-					# 	break
-					line += 1
-				# Stop if there was a collision
-				# if collision:
-				# 	break
-
-				# Horizontal lines
-				for j in [2, 3]:
-					# Get the starting and ending x, y coords
-					start_x = np.around(box[points[j]][0][0], decimals=10)
-					start_y = np.around(box[points[j]][1][0], decimals=10)
-					end_x = np.around(box[points[j - 2]][0][0], decimals=10)
-					end_y = np.around(box[points[j - 2]][1][0], decimals=10)
-					# Get the starting grid coords
-					grid_x = int(math.floor(start_x / self.grid_size))
-					grid_y = int(math.floor(start_y / self.grid_size))
-					# Check that the grid position is valid
-					if grid_x < 0 or grid_x >= self.grid_length:
-						continue
-					if grid_y < 0 or grid_y >= self.grid_length:
-						continue
-					# Check if it is already occupied
-					if self.reservations[res_index][grid_y][grid_x] != -1:
-						collision = True
-						col_counter[c_pos[line]] += 1
-					# Set the grid square to occupied
-					temp_res[time][grid_y][grid_x] = hs[time]
-					# Get the next reference point
-					check_x = grid_x * self.grid_size
-					check_y = grid_y * self.grid_size
-					# Check if the line is on the edge of a grid square
-					if start_y == check_y and grid_y > 0:
-						# Check the grid below
-						if self.reservations[res_index][grid_y - 1][grid_x] != -1:
-							collision = True
-							col_counter[c_pos[line]] += 1
-						temp_res[time][grid_y - 1][grid_x] = hs[time]
-					while check_x >= end_x:
-						grid_x -= 1
-						# Make sure we are not trying to mark a grid off the intersection
-						if grid_x < 0:
-							break
-						# Check if the line is on the edge of a grid square
-						if start_y == check_y and grid_y > 0:
-							# Check the grid below
-							if self.reservations[res_index][grid_y - 1][grid_x] != -1:
-								collision = True
-								col_counter[c_pos[line]] += 1
-							temp_res[time][grid_y - 1][grid_x] = hs[time]
-						# Check if it is already occupied
-						if self.reservations[res_index][grid_y][grid_x] != -1:
-							collision = True
-							col_counter[c_pos[line]] += 1
-						# Set the grid square to occupied
-						temp_res[time][grid_y][grid_x] = hs[time]
-						# Get the next reference point
-						check_x = grid_x * self.grid_size
-						check_y = grid_y * self.grid_size
-					# if collision:
-					# 	break
-					line += 1
-				# Stop if there was a collision
-				if collision:
-					break
-
-		# There was no collision
+		# If it works return true
 		if not collision:
 			# Add the temp grids back to reservations
-			for i in range(len(indices)):
-				self.reservations[indices[i]] = temp_res[i]
+			for i in range(len(col_indices)):
+				self.reservations[col_indices[i]] = col_temp_res[i]
 			success = True
-		# Collision occured
+			# return success, xs, ys, hs, vs, ts
 		else:
 			success = False
-
 		return success, xs, ys, hs, vs, ts
 
-	def __detectCollisions(self, car, desired_velo):
-		"""
-        :param car = the car we will look at to see if the reservation can be accepted
-        :returns: A tuple representing the trajectory.
-                  Success = true or false indicating if the reservation is accepted or not
-                  xs = list of x-coordinates over the path
-                  ys = list of y-coordinates over the path
-                  hs = list of headings over the path
-                  vs = list of velocities over the path
-                  ts = list of timesteps over the path
-        """
-		# Get the trajectory along the path if the car maintains its velocity
-		# print "\rDetecting collision for car: ",car.car_id,
-		# sys.stdout.flush()
-		xs, ys, hs, vs, ts = self.__createTrajectory(car, desired_velo)
-		# print "\rCreated trajectory for car: ",car.car_id,
-		# sys.stdout.flush()
-		car_w = car.width
-		car_l = car.length
 
-		# Calculate the initial bounding box
-		box = np.array([[[xs[0] - (car_w / 2)],
-						 [ys[0] + (car_l / 2)],
-						 [1]],
-						[[xs[0] + (car_w / 2)],
-						 [ys[0] + (car_l / 2)],
-						 [1]],
-						[[xs[0] - (car_w / 2)],
-						 [ys[0] - (car_l / 2)],
-						 [1]],
-						[[xs[0] + (car_w / 2)],
-						 [ys[0] - (car_l / 2)],
-						 [1]]])
-		# Rotate so heading in correct direction
-		T = np.array([[1, 0, -xs[0]],
-					  [0, 1, -ys[0]],
-					  [0, 0, 1]])
-		R = np.array([[np.cos(np.radians(-hs[0])), -np.sin(np.radians(-hs[0])), 0],
-					  [np.sin(np.radians(-hs[0])), np.cos(np.radians(-hs[0])), 0],
-					  [0, 0, 1]])
-		R = np.around(R, decimals=10)
-		for b in range(4):
-			box[b] = np.dot(np.dot(np.dot(np.linalg.inv(T), R), T), box[b])
-
-		temp_res = np.full((len(ts), self.grid_length, self.grid_length), -1)  # Hold the temp grids
-		indices = [i for i in range(len(ts))]  # Hold the index of reservations the grid in temp_res came from
-		collision = False
-
-		# Check for collisions at each time
-		for time in range(len(ts)):
-			# Get the index of the grid in reservations
-			res_index = int((ts[time] * 10) % 1000)
-			temp_res[time] = self.reservations[res_index]  # Copy the grid
-			indices[time] = res_index  # Save the index
-
-			# Update the position of the bounding box
-			if time > 0:
-				delta_x = xs[time] - xs[time - 1]
-				delta_y = ys[time] - ys[time - 1]
-				delta_h = hs[time] - hs[time - 1]
-				T = np.array([[1, 0, delta_x],
-							  [0, 1, delta_y],
-							  [0, 0, 1]])
-				# Translate the box to the new position
-				for b in range(4):
-					box[b] = T.dot(box[b])
-				# Rotate the box if needed
-				if delta_h != 0:
-					T = np.array([[1, 0, -xs[time]],
-								  [0, 1, -ys[time]],
-								  [0, 0, 1]])
-					R = np.array([[np.cos(np.radians(-delta_h)), -np.sin(np.radians(-delta_h)), 0],
-								  [np.sin(np.radians(-delta_h)), np.cos(np.radians(-delta_h)), 0],
-								  [0, 0, 1]])
-					R = np.around(R, decimals=10)
-					for b in range(4):
-						box[b] = np.dot(np.dot(np.dot(np.linalg.inv(T), R), T), box[b])
-
-			mode = 0
-			if box.min() < 0:
-				mode = 1
-			points = [0, 1, 2, 3]
-			if hs[time] >= 0 and hs[time] < 90:
-				points = [2, 0, 3, 1]
-			elif hs[time] >= 90 and hs[time] < 180:
-				points = [3, 2, 1, 0]
-			elif hs[time] >= 180 and hs[time] < 270:
-				points = [1, 3, 0, 2]
-
-			# Draw positive sloped lines left-right/bottom-top
-			if mode == 0:
-				# Positive sloped lines
-				for j in [0, 2]:
-					# Get the starting and ending x, y coords
-					start_x = np.around(box[points[j]][0][0], decimals=10)
-					start_y = np.around(box[points[j]][1][0], decimals=10)
-					end_x = np.around(box[points[j + 1]][0][0], decimals=10)
-					end_y = np.around(box[points[j + 1]][1][0], decimals=10)
-					# Get the starting grid coords
-					grid_x = int(math.floor(start_x / self.grid_size))
-					grid_y = int(math.floor(start_y / self.grid_size))
-					# Check that the grid position is valid
-					if grid_x < 0 or grid_x >= self.grid_length:
-						continue
-					elif grid_y < 0 or grid_y >= self.grid_length:
-						continue
-					# Check if it is already occupied
-					if self.reservations[res_index][grid_y][grid_x] != -1:
-						collision = True
-						break
-					# Set the grid square to occupied
-					temp_res[time][grid_y][grid_x] = hs[time]
-					# Get the next reference point
-					check_x = (grid_x + 1) * self.grid_size
-					check_y = (grid_y + 1) * self.grid_size
-					on_left_line = start_x == (check_x - self.grid_size)
-					on_bottom_line = start_y == (check_y - self.grid_size)
-					# Check if the line starts on an edge/corner of a grid square
-					if on_left_line and grid_x > 0:
-						# Check the grid to the left
-						if self.reservations[res_index][grid_y][grid_x - 1] != -1:
-							collision = True
-							break
-						temp_res[time][grid_y][grid_x - 1] = hs[time]
-					if on_bottom_line and grid_y > 0:
-						# Check the grid bellow
-						if self.reservations[res_index][grid_y - 1][grid_x] != -1:
-							collision = True
-							break
-						temp_res[time][grid_y - 1][grid_x] = hs[time]
-					if on_left_line and on_left_line and grid_x > 0 and grid_y > 0:
-						# Check the grid bellow and to the left
-						if self.reservations[res_index][grid_y - 1][grid_x - 1] != -1:
-							collision = True
-							break
-						temp_res[time][grid_y - 1][grid_x - 1] = hs[time]
-					# Get the slope of the line
-					delta_x = np.around(end_x - start_x, decimals=7)
-					delta_y = np.around(end_y - start_y, decimals=7)
-					if delta_x == 0:
-						m = float("inf")
-					else:
-						m = np.around(delta_y / delta_x, decimals=10)
-					while check_x <= end_x or check_y <= end_y:
-						# Get the slope to the reference point
-						delta_x = np.around(check_x - start_x, decimals=7)
-						delta_y = np.around(check_y - start_y, decimals=7)
-						if delta_x == 0:
-							temp_m = float("inf")
-						else:
-							temp_m = np.around(delta_y / delta_x, decimals=10)
-						# Update the grid coords
-						if temp_m > m:  # Go right
-							grid_x += 1
-						elif temp_m < m:  # Go up
-							grid_y += 1
-							# Check the grid to the left if the line is on the grid line
-							if m == float("inf") and start_x == check_x - self.grid_size and grid_x > 0:
-								# Make sure we are not trying to mark a grid off the intersection
-								if grid_x >= self.grid_length or grid_y >= self.grid_length:
-									break
-								if self.reservations[res_index][grid_y][grid_x - 1] != -1:
-									collision = True
-									break
-								temp_res[time][grid_y][grid_x - 1] = hs[time]
-						else:  # Go up and right
-							grid_x += 1
-							grid_y += 1
-							# Make sure we are not trying to mark a grid off the intersection
-							if grid_x >= self.grid_length or grid_y >= self.grid_length:
-								break
-							if self.reservations[res_index][grid_y - 1][grid_x] != -1:
-								collision = True
-								break
-							if self.reservations[res_index][grid_y][grid_x - 1] != -1:
-								collision = True
-								break
-							temp_res[time][grid_y - 1][grid_x] = hs[time]
-							temp_res[time][grid_y][grid_x - 1] = hs[time]
-						# Make sure we are not trying to mark a grid off the intersection
-						if grid_x >= self.grid_length or grid_y >= self.grid_length:
-							break
-						# Check if it is already occupied
-						if self.reservations[res_index][grid_y][grid_x] != -1:
-							collision = True
-							break
-						# Set the grid square to occupied
-						temp_res[time][grid_y][grid_x] = hs[time]
-						# Get the next reference point
-						check_x = (grid_x + 1) * self.grid_size
-						check_y = (grid_y + 1) * self.grid_size
+		# If it fails create path based from start to point of collision where car speeds up or slows down
+		slow_down = False
+		##############################################################
+		###
+		### TODO: Determine if the car needs to slow down or speed up
+		###
+		##############################################################
+		
+		tries = 0		# Indicates which attempt this is
+		while True:
+			if tries == 1:
+				slow_down = not slow_down
+			# Get the new path of the car to the point of collision
+			if slow_down:
+				# Position and heading stay the same. We want to get to this exact position/heading at a later time
+				col_x = xs[col_time_index]
+				col_y = ys[col_time_index]
+				col_h = hs[col_time_index]
+				t = col_time_index + 1		# The index of the time array to check for collision
+				# Check the position and heading at a later time until there is no collision
+				while collision:
+					collision, col_time_index, col_counter, col_direction, col_temp_res, col_indices = self.__collisionDetection([col_x], [col_y], [col_h], [ts[t]], car)
 					if collision:
-						break
-				# Stop if there was a collision
-				if collision:
-					break
-
-				# Negative sloped lines
-				for j in [0, 1]:
-					# Get the starting and ending x, y coords
-					start_x = np.around(box[points[j]][0][0], decimals=10)
-					start_y = np.around(box[points[j]][1][0], decimals=10)
-					end_x = np.around(box[points[j + 2]][0][0], decimals=10)
-					end_y = np.around(box[points[j + 2]][1][0], decimals=10)
-					# Get the starting grid coords
-					grid_x = int(math.floor(start_x / self.grid_size))
-					grid_y = int(math.floor(start_y / self.grid_size))
-					# Check if the grid position is valid
-					if grid_x < 0 or grid_x >= self.grid_length:
-						continue
-					if grid_y < 0 or grid_y >= self.grid_length:
-						continue
-					# Check if it is already occupied
-					if self.reservations[res_index][grid_y][grid_x] != -1:
-						collision = True
-						break
-					# Set the grid square to occupied
-					temp_res[time][grid_y][grid_x] = hs[time]
-					check_x = (grid_x + 1) * self.grid_size
-					check_y = grid_y * self.grid_size
-					on_left_line = start_x == (check_x - self.grid_size)
-					on_bottom_line = start_y == check_y
-					# Check if the line starts on an edge/corner of a grid square
-					if on_left_line and grid_x > 0:
-						# Check the grid to the left
-						if self.reservations[res_index][grid_y][grid_x - 1] != -1:
-							collision = True
-							break
-						temp_res[time][grid_y][grid_x - 1] = hs[time]
-					if on_bottom_line and grid_y > 0:
-						# Check the grid below
-						if self.reservations[res_index][grid_y - 1][grid_x] != -1:
-							collision = True
-							break
-						temp_res[time][grid_y - 1][grid_x] = hs[time]
-					# Get the slope of the line
-					delta_x = np.around(end_x - start_x, decimals=7)
-					delta_y = np.around(end_y - start_y, decimals=7)
-					if delta_x == 0:
-						m = -float("inf")
-					else:
-						m = np.around(delta_y / delta_x, decimals=10)
-					while check_x <= end_x or check_y >= end_y:
-						# Get the slope to the reference point
-						delta_x = np.around(check_x - start_x, decimals=7)
-						delta_y = np.around(check_y - start_y, decimals=7)
-						if delta_x == 0:
-							temp_m = float("inf")
-						else:
-							temp_m = np.around(delta_y / delta_x, decimals=10)
-						# Update grid coords
-						if temp_m < m:  # Go right
-							grid_x += 1
-							# Check the grid square above, if the line is on the grid line
-							if m == 0 and start_y == check_y + self.grid_size:
-								# Make sure not to mark a grid off the intersection
-								if grid_x >= self.grid_length or grid_y >= self.grid_length:
-									break
-								if self.reservations[res_index][grid_y + 1][grid_x] != -1:
-									collision = True
-									break
-								temp_res[time][grid_y + 1][grid_x] = hs[time]
-						elif temp_m > m:  # Go down
-							grid_y -= 1
-						else:  # Go down and right
-							grid_x += 1
-							grid_y -= 1
-							# Make sure we are not trying to mark a grid off the intersection
-							if grid_x >= self.grid_length or grid_y < 0:
-								break
-							# Check the grid squares next to this one
-							if self.reservations[res_index][grid_y + 1][grid_x] != -1:
-								collision = True
-								break
-							if self.reservations[res_index][grid_y][grid_x - 1] != -1:
-								collision = True
-								break
-							temp_res[time][grid_y + 1][grid_x] = hs[time]
-							temp_res[time][grid_y][grid_x - 1] = hs[time]
-						# Make sure we are not trying to mark a grid off the intersection
-						if grid_x >= self.grid_length or grid_y < 0:
-							break
-						# Check if it is already occupied
-						if self.reservations[res_index][grid_y][grid_x] != -1:
-							collision = True
-							break
-						# Set the grid space to occupied
-						temp_res[time][grid_y][grid_x] = hs[time]
-						# Get the next reference point
-						check_x = (grid_x + 1) * self.grid_size
-						check_y = grid_y * self.grid_size
-					if collision:
-						break
-				# Stop if there was a collision
-				if collision:
-					break
-			# Draw positive sloped lines right-left/top-bottom
+						t += 1
+				col_t = ts[t]
 			else:
-				# Vertical lines
-				for j in [1, 3]:
-					# Get the starting and ending x, y coords
-					start_x = np.around(box[points[j]][0][0], decimals=10)
-					start_y = np.around(box[points[j]][1][0], decimals=10)
-					end_x = np.around(box[points[j - 1]][0][0], decimals=10)
-					end_y = np.around(box[points[j - 1]][1][0], decimals=10)
-					# Get the starting grid coords
-					grid_x = int(math.floor(start_x / self.grid_size))
-					grid_y = int(math.floor(start_y / self.grid_size))
-					# Check that the grid position is valid
-					if grid_x < 0 or grid_x >= self.grid_length:
-						continue
-					if grid_y < 0 or grid_y >= self.grid_length:
-						continue
-					# Check if it is already occupied
-					if self.reservations[res_index][grid_y][grid_x] != -1:
-						collision = True
-						break
-					# Set the grid square to occupied
-					temp_res[time][grid_y][grid_x] = hs[time]
-					# Get the reference point
-					check_x = grid_x * self.grid_size
-					check_y = grid_y * self.grid_size
-					# Check if the line is on the edge/corner of a grid square
-					if start_x == check_x and grid_x > 0:
-						# Check the grid to the left
-						if self.reservations[res_index][grid_y][grid_x - 1] != -1:
-							collision = True
-							break
-						temp_res[time][grid_y][grid_x - 1] = hs[time]
-					while check_y >= end_y:
-						grid_y -= 1
-						# Make sure we are not trying to mark a grid off the intersection
-						if grid_y < 0:
-							break
-						# Check if the line is on the edge of a grid square
-						if start_x == check_x and grid_x > 0:
-							# Check the grid to the left
-							if self.reservations[res_index][grid_y][grid_x - 1] != -1:
-								collision = True
-								break
-							temp_res[time][grid_y][grid_x - 1] = hs[time]
-						# Check if the current grid is already occupied
-						if self.reservations[res_index][grid_y][grid_x] != -1:
-							collision = True
-							break
-						# Set the grid square to occupied
-						temp_res[time][grid_y][grid_x] = hs[time]
-						# Get the next reference point
-						check_x = grid_x * self.grid_size
-						check_y = grid_y * self.grid_size
+				# Time to check if clear
+				col_t = ts[col_time_index]
+				i = new_col_time_index + 1		# The index for the position and heading arrays to check for collisions
+				while collision:
+					collision, col_time_index, col_counter, col_direction, col_temp_res, col_indices = self.__collisionDetection([xs[i]], [ys[i]], [hs[i]], [col_t], car)
 					if collision:
-						break
-				# Stop if there was a collision
-				if collision:
-					break
+						i += 1
+				col_x = xs[i]
+				col_y = ys[i]
+				col_h = hs[i]
+			col_xs, col_ys, col_hs, col_vs, col_ts = self.__createPartTrajectory(car, car.x, car.y, car.heading, car.vel, car.t, col_x, col_y, col_h, col_t)
 
-				# Horizontal lines
-				for j in [2, 3]:
-					# Get the starting and ending x, y coords
-					start_x = np.around(box[points[j]][0][0], decimals=10)
-					start_y = np.around(box[points[j]][1][0], decimals=10)
-					end_x = np.around(box[points[j - 2]][0][0], decimals=10)
-					end_y = np.around(box[points[j - 2]][1][0], decimals=10)
-					# Get the starting grid coords
-					grid_x = int(math.floor(start_x / self.grid_size))
-					grid_y = int(math.floor(start_y / self.grid_size))
-					# Check that the grid position is valid
-					if grid_x < 0 or grid_x >= self.grid_length:
-						continue
-					if grid_y < 0 or grid_y >= self.grid_length:
-						continue
-					# Check if it is already occupied
-					if self.reservations[res_index][grid_y][grid_x] != -1:
-						collision = True
-						break
-					# Set the grid square to occupied
-					temp_res[time][grid_y][grid_x] = hs[time]
-					# Get the next reference point
-					check_x = grid_x * self.grid_size
-					check_y = grid_y * self.grid_size
-					# Check if the line is on the edge of a grid square
-					if start_y == check_y and grid_y > 0:
-						# Check the grid below
-						if self.reservations[res_index][grid_y - 1][grid_x] != -1:
-							collision = True
-							break
-						temp_res[time][grid_y - 1][grid_x] = hs[time]
-					while check_x >= end_x:
-						grid_x -= 1
-						# Make sure we are not trying to mark a grid off the intersection
-						if grid_x < 0:
-							break
-						# Check if the line is on the edge of a grid square
-						if start_y == check_y and grid_y > 0:
-							# Check the grid below
-							if self.reservations[res_index][grid_y - 1][grid_x] != -1:
-								collision = True
-								break
-							temp_res[time][grid_y - 1][grid_x] = hs[time]
-						# Check if it is already occupied
-						if self.reservations[res_index][grid_y][grid_x] != -1:
-							collision = True
-							break
-						# Set the grid square to occupied
-						temp_res[time][grid_y][grid_x] = hs[time]
-						# Get the next reference point
-						check_x = grid_x * self.grid_size
-						check_y = grid_y * self.grid_size
-					if collision:
-						break
-				# Stop if there was a collision
-				if collision:
-					break
+			# Check this path
+			collision, col_time_index, col_counter, col_direction, col_temp_res, col_indices = self.__collisionDetection(col_xs, col_ys, col_hs, col_ts, car)
 
-		# There was no collision
-		if not collision:
-			# Add the temp grids back to reservations
-			for i in range(len(indices)):
-				self.reservations[indices[i]] = temp_res[i]
-			success = True
-		# Collision occured
-		else:
-			success = False
+			# If this new path works, check path from collision point to finish point using desired velo
+			if not collision:
+				i = len(col_xs) - 1
+				end_xs, end_ys, end_hs, end_vs, end_ts = self.__createPartTrajectory(car, desired_velo, col_xs[i], col_ys[i], col_hs[i], col_vs[i], col_ts[i])
+				collision, col_time_index, col_counter, col_direction, end_temp_res, end_indices = self.__collisionDetection(end_xs, end_ys, end_hs, end_ts, car)
 
-		return success, xs, ys, hs, vs, ts
+				# If this end portion works, return entire path as success
+				if not collision:
+					# Add the temp grids back to reservations
+					for i in range(len(col_indices)):
+						self.reservations[col_indices[i]] = col_temp_res[i]
+					for i in range(len(end_indices)):
+						self.reservations[end_indices[i]] = end_temp_res[i]
+					final_xs = col_xs + end_xs[1:]
+					final_ys = col_ys + end_ys[1:]
+					final_hs = col_hs + end_hs[1:]
+					final_vs = col_vs + end_vs[1:]
+					final_ts = col_ts + end_ts[1:]
+					success = True
+					return success, final_xs, final_ys, final_hs, final_vs, final_ts
+
+				# If this end portion fails, try end portion using the final velocity of the portion above
+				end_xs, end_ys, end_hs, end_vs, end_ts = self.__createPartTrajectory(car, col_vs[i], col_xs[i], col_ys[i], col_hs[i], col_vs[i], col_ts[i])
+				collision, col_time_index, col_counter, col_direction, end_temp_res, end_indices = self.__collisionDetection(end_xs, end_ys, end_hs, end_ts, car)
+
+				# If this end portion works, return entire path
+				if not collision:
+					# Add the temp grids back to reservations
+					for i in range(len(col_indices)):
+						self.reservations[col_indices[i]] = col_temp_res[i]
+					for i in range(len(end_indices)):
+						self.reservations[end_indices[i]] = end_temp_res[i]
+					final_xs = col_xs + end_xs[1:]
+					final_ys = col_ys + end_ys[1:]
+					final_hs = col_hs + end_hs[1:]
+					final_vs = col_vs + end_vs[1:]
+					final_ts = col_ts + end_ts[1:]
+					success = True
+					return success, final_xs, final_ys, final_hs, final_vs, final_ts
+
+				# If fails try first portion using opposite speed up/slow down
+				if tries == 0:
+					tries = 1
+					continue
+				else:
+					return False, [], [], [], [], []
+			else:
+				if tries == 0:
+					tries = 1
+					continue
+				else:
+					return False, [], [], [], [], []
 
 	def __dresnerStonePolicy(self, car):
 		"""
@@ -1007,10 +256,21 @@ class IntersectionManager:
 				  ts = list of timesteps over the path
 		"""
 		min_v = 10
-		success, xs, ys, headings, vs, ts = self.__detectCollisions(car, car.max_V)
-		if not success:
-			success, xs, ys, headings, vs, ts = self.__detectCollisions(car, max(min_v, car.vel))
-		return success, xs, ys, headings, vs, ts
+		# Check the car going at max velocity
+		xs, ys, hs, vs, ts = self.__createFullTrajectory(car, car.max_V)
+		collision, col_time_index, col_counter, col_direction, col_temp_res, col_indices = self.__collisionDetection(xs, ys, hs, ts, car)
+		# If there is a collision, check the car going at its current velocity. Limit it to go at least the min velocity
+		if collision:
+			xs, ys, hs, vs, ts = self.__createFullTrajectory(car, max(min_v, car.vel))
+			collision, col_time_index, col_counter, col_direction, col_temp_res, col_indices = self.__collisionDetection(xs, ys, hs, ts, car)
+		if not collision:
+			# Add the temp grids back to reservations
+			for i in range(len(col_indices)):
+				self.reservations[col_indices[i]] = col_temp_res[i]
+			success = True
+		else:
+			success = False
+		return success, xs, ys, hs, vs, ts
 
 	def __trafficLightPolicy(self, car):
 		"""
@@ -1052,18 +312,33 @@ class IntersectionManager:
 		# When car requests:
 		if car.lane_id in lanes:		# Car is in the lane that is green
 			if not self.conflict:		# No conflict so check the request
-				success, xs, ys, hs, vs, ts = self.__detectCollisions(car, car.desired_vel)
+				xs, ys, hs, vs, ts = self.__createFullTrajectory(car, car.desired_vel)
+				collision, col_time_index, col_counter, col_direction, col_temp_res, col_indices = self.__collisionDetection(xs, ys, hs, ts, car)
 				self.time_to_change = max(self.time_to_change, self.__getExitTime(car))
-				if success:
+				if not collision:
 					exit_time = self.__getExitTime(car)
 					self.time_to_change = max(self.time_to_change, exit_time)
+					# Add the temp grids back to reservations
+					for i in range(len(col_indices)):
+						self.reservations[col_indices[i]] = col_temp_res[i]
+					success = True
+				else:
+					success = False
 				return success, xs, ys, hs, vs, ts
 			else:		# Conflict so see if the car can still make it through
 				exit_time = self.__getExitTime(car)
 				if exit_time > self.time_to_change:		# The car cannot make it through the intersection
 					return success, xs, ys, hs, vs, ts
 				else:
-					success, xs, ys, hs, vs, ts = self.__detectCollisions(car, car.desired_vel)
+					xs, ys, hs, vs, ts = self.__createFullTrajectory(car, car.desired_vel)
+					collision, col_time_index, col_counter, col_direction, col_temp_res, col_indices = self.__collisionDetection(xs, ys, hs, ts, car)
+					if not collision:
+						# Add the temp grids back to reservations
+						for i in range(len(col_indices)):
+							self.reservations[col_indices[i]] = col_temp_res[i]
+						success = True
+					else:
+						success = False
 					return success, xs, ys, hs, vs, ts
 		else:		# Car is not in the lane that is green
 			if car.t >= self.time_to_change:		# It is past the time to change the light
@@ -1097,12 +372,19 @@ class IntersectionManager:
 						break
 				self.time_to_change = car.t + min(min_green_time, max_green_time)
 				if car.lane_id in lanes:		# The car is in the lane that is green
-					success, xs, ys, hs, vs, ts = self.__detectCollisions(car, car.desired_vel)
+					xs, ys, hs, vs, ts = self.__createFullTrajectory(car, car.desired_vel)
+					collision, col_time_index, col_counter, col_direction, col_temp_res, col_indices = self.__collisionDetection(xs, ys, hs, ts, car)
 					self.conflict = False
 					self.time_to_change = max(self.time_to_change, self.__getExitTime(car))
-					if success:
+					if not collision:
 						exit_time = self.__getExitTime(car)
 						self.time_to_change = max(self.time_to_change, exit_time)
+						# Add the temp grids back to reservations
+						for i in range(len(col_indices)):
+							self.reservations[col_indices[i]] = col_temp_res[i]
+						success = True
+					else:
+						success = False
 					return success, xs, ys, hs, vs, ts
 				else:		# The car is not in the lane that is green so set conflict flag and reject request
 					self.conflict = True
@@ -1181,10 +463,451 @@ class IntersectionManager:
 			return success, xs, ys, hs, vs, ts
 
 		# Check if the car is clear
-		return self.__detectCollisions(car, car.max_V)
+		xs, ys, hs, vs, ts = self.__createFullTrajectory(car, car.desired_vel)
+		collision, col_time_index, col_counter, col_direction, col_temp_res, col_indices = self.__collisionDetection(xs, ys, hs, ts, car)
+		if not collision:
+			# Add the temp grids back to reservations
+			for i in range(len(col_indices)):
+				self.reservations[col_indices[i]] = col_temp_res[i]
+			success = True
+		else:
+			success = False
+		return success, xs, ys, hs, vs, ts
 
+	def __collisionDetection(self, xs, ys, hs, ts, car):
+		car_w = car.width
+		car_l = car.length
 
-	def __createTrajectory(self, car, desired_velo):
+		# Calculate the initial bounding box
+		box = np.array([[[xs[0] - (car_w / 2)],
+						 [ys[0] + (car_l / 2)],
+						 [1]],
+						[[xs[0] + (car_w / 2)],
+						 [ys[0] + (car_l / 2)],
+						 [1]],
+						[[xs[0] - (car_w / 2)],
+						 [ys[0] - (car_l / 2)],
+						 [1]],
+						[[xs[0] + (car_w / 2)],
+						 [ys[0] - (car_l / 2)],
+						 [1]]])
+		# Rotate so heading in correct direction
+		T = np.array([[1, 0, -xs[0]],
+					  [0, 1, -ys[0]],
+					  [0, 0, 1]])
+		R = np.array([[np.cos(np.radians(-hs[0])), -np.sin(np.radians(-hs[0])), 0],
+					  [np.sin(np.radians(-hs[0])), np.cos(np.radians(-hs[0])), 0],
+					  [0, 0, 1]])
+		R = np.around(R, decimals=10)
+		for b in range(4):
+			box[b] = np.dot(np.dot(np.dot(np.linalg.inv(T), R), T), box[b])
+
+		temp_res = np.full((len(ts), self.grid_length, self.grid_length), -1)  # Hold the temp grids
+		indices = [i for i in range(len(ts))]  # Hold the index of reservations the grid in temp_res came from
+		collision = False
+		reserved_heading = -1		# Holds the heading of the car that already has a reservation
+
+		# Check for collisions at each time
+		for time in range(len(ts)):
+			# Get the index of the grid in reservations
+			res_index = int((ts[time] * 10) % 1000)
+			temp_res[time] = self.reservations[res_index]  # Copy the grid
+			indices[time] = res_index  # Save the index
+
+			# Update the position of the bounding box
+			if time > 0:
+				delta_x = xs[time] - xs[time - 1]
+				delta_y = ys[time] - ys[time - 1]
+				delta_h = hs[time] - hs[time - 1]
+				T = np.array([[1, 0, delta_x],
+							  [0, 1, delta_y],
+							  [0, 0, 1]])
+				# Translate the box to the new position
+				for b in range(4):
+					box[b] = T.dot(box[b])
+				# Rotate the box if needed
+				if delta_h != 0:
+					T = np.array([[1, 0, -xs[time]],
+								  [0, 1, -ys[time]],
+								  [0, 0, 1]])
+					R = np.array([[np.cos(np.radians(-delta_h)), -np.sin(np.radians(-delta_h)), 0],
+								  [np.sin(np.radians(-delta_h)), np.cos(np.radians(-delta_h)), 0],
+								  [0, 0, 1]])
+					R = np.around(R, decimals=10)
+					for b in range(4):
+						box[b] = np.dot(np.dot(np.dot(np.linalg.inv(T), R), T), box[b])
+
+			mode = 0
+			if box.min() < 0:
+				mode = 1
+			points = [0, 1, 2, 3]
+			col_counter = [0, 0, 0, 0]
+			c_pos = [1, 3, 0, 2]
+			if hs[time] >= 0 and hs[time] < 90:
+				points = [2, 0, 3, 1]
+				c_pos = [0, 2, 3, 1]
+			elif hs[time] >= 90 and hs[time] < 180:
+				points = [3, 2, 1, 0]
+				c_pos = [3, 1, 2, 0]
+			elif hs[time] >= 180 and hs[time] < 270:
+				points = [1, 3, 0, 2]
+				c_pos = [2, 0, 1, 3]
+
+			line = 0
+			# Draw positive sloped lines left-right/bottom-top
+			if mode == 0:
+				# Positive sloped lines
+				for j in [0, 2]:
+					# Get the starting and ending x, y coords
+					start_x = np.around(box[points[j]][0][0], decimals=10)
+					start_y = np.around(box[points[j]][1][0], decimals=10)
+					end_x = np.around(box[points[j + 1]][0][0], decimals=10)
+					end_y = np.around(box[points[j + 1]][1][0], decimals=10)
+					# Get the starting grid coords
+					grid_x = int(math.floor(start_x / self.grid_size))
+					grid_y = int(math.floor(start_y / self.grid_size))
+					# Check that the grid position is valid
+					if grid_x < 0 or grid_x >= self.grid_length:
+						continue
+					elif grid_y < 0 or grid_y >= self.grid_length:
+						continue
+					# Check if it is already occupied
+					if self.reservations[res_index][grid_y][grid_x] != -1:
+						collision = True
+						col_counter[c_pos[line]] += 1
+						reserved_heading = self.reservations[res_index][grid_y][grid_x]
+					# Set the grid square to occupied
+					temp_res[time][grid_y][grid_x] = hs[time]
+					# Get the next reference point
+					check_x = (grid_x + 1) * self.grid_size
+					check_y = (grid_y + 1) * self.grid_size
+					on_left_line = start_x == (check_x - self.grid_size)
+					on_bottom_line = start_y == (check_y - self.grid_size)
+					# Check if the line starts on an edge/corner of a grid square
+					if on_left_line and grid_x > 0:
+						# Check the grid to the left
+						if self.reservations[res_index][grid_y][grid_x - 1] != -1:
+							collision = True
+							col_counter[c_pos[line]] += 1
+							reserved_heading = self.reservations[res_index][grid_y][grid_x - 1]
+						temp_res[time][grid_y][grid_x - 1] = hs[time]
+					if on_bottom_line and grid_y > 0:
+						# Check the grid bellow
+						if self.reservations[res_index][grid_y - 1][grid_x] != -1:
+							collision = True
+							col_counter[c_pos[line]] += 1
+							reserved_heading = self.reservations[res_index][grid_y - 1][grid_x]
+						temp_res[time][grid_y - 1][grid_x] = hs[time]
+					if on_left_line and on_left_line and grid_x > 0 and grid_y > 0:
+						# Check the grid bellow and to the left
+						if self.reservations[res_index][grid_y - 1][grid_x - 1] != -1:
+							collision = True
+							col_counter[c_pos[line]] += 1
+							reserved_heading = self.reservations[res_index][grid_y - 1][grid_x - 1]
+						temp_res[time][grid_y - 1][grid_x - 1] = hs[time]
+					# Get the slope of the line
+					delta_x = np.around(end_x - start_x, decimals=7)
+					delta_y = np.around(end_y - start_y, decimals=7)
+					if delta_x == 0:
+						m = float("inf")
+					else:
+						m = np.around(delta_y / delta_x, decimals=10)
+					while check_x <= end_x or check_y <= end_y:
+						# Get the slope to the reference point
+						delta_x = np.around(check_x - start_x, decimals=7)
+						delta_y = np.around(check_y - start_y, decimals=7)
+						if delta_x == 0:
+							temp_m = float("inf")
+						else:
+							temp_m = np.around(delta_y / delta_x, decimals=10)
+						# Update the grid coords
+						if temp_m > m:  # Go right
+							grid_x += 1
+						elif temp_m < m:  # Go up
+							grid_y += 1
+							# Check the grid to the left if the line is on the grid line
+							if m == float("inf") and start_x == check_x - self.grid_size and grid_x > 0:
+								# Make sure we are not trying to mark a grid off the intersection
+								if grid_x >= self.grid_length or grid_y >= self.grid_length:
+									break
+								if self.reservations[res_index][grid_y][grid_x - 1] != -1:
+									collision = True
+									col_counter[c_pos[line]] += 1
+									reserved_heading = self.reservations[res_index][grid_y][grid_x - 1]
+								temp_res[time][grid_y][grid_x - 1] = hs[time]
+						else:  # Go up and right
+							grid_x += 1
+							grid_y += 1
+							# Make sure we are not trying to mark a grid off the intersection
+							if grid_x >= self.grid_length or grid_y >= self.grid_length:
+								break
+							if self.reservations[res_index][grid_y - 1][grid_x] != -1:
+								collision = True
+								col_counter[c_pos[line]] += 1
+								reserved_heading = self.reservations[res_index][grid_y - 1][grid_x]
+							if self.reservations[res_index][grid_y][grid_x - 1] != -1:
+								collision = True
+								col_counter[c_pos[line]] += 1
+								reserved_heading = self.reservations[res_index][grid_y][grid_x - 1]
+							temp_res[time][grid_y - 1][grid_x] = hs[time]
+							temp_res[time][grid_y][grid_x - 1] = hs[time]
+						# Make sure we are not trying to mark a grid off the intersection
+						if grid_x >= self.grid_length or grid_y >= self.grid_length:
+							break
+						# Check if it is already occupied
+						if self.reservations[res_index][grid_y][grid_x] != -1:
+							collision = True
+							col_counter[c_pos[line]] += 1
+							reserved_heading = self.reservations[res_index][grid_y][grid_x]
+						# Set the grid square to occupied
+						temp_res[time][grid_y][grid_x] = hs[time]
+						# Get the next reference point
+						check_x = (grid_x + 1) * self.grid_size
+						check_y = (grid_y + 1) * self.grid_size
+					# if collision:
+					# 	break
+					line += 1
+				# Stop if there was a collision
+				# if collision:
+				# 	break
+
+				# Negative sloped lines
+				for j in [0, 1]:
+					# Get the starting and ending x, y coords
+					start_x = np.around(box[points[j]][0][0], decimals=10)
+					start_y = np.around(box[points[j]][1][0], decimals=10)
+					end_x = np.around(box[points[j + 2]][0][0], decimals=10)
+					end_y = np.around(box[points[j + 2]][1][0], decimals=10)
+					# Get the starting grid coords
+					grid_x = int(math.floor(start_x / self.grid_size))
+					grid_y = int(math.floor(start_y / self.grid_size))
+					# Check if the grid position is valid
+					if grid_x < 0 or grid_x >= self.grid_length:
+						continue
+					if grid_y < 0 or grid_y >= self.grid_length:
+						continue
+					# Check if it is already occupied
+					if self.reservations[res_index][grid_y][grid_x] != -1:
+						collision = True
+						col_counter[c_pos[line]] += 1
+						reserved_heading = self.reservations[res_index][grid_y][grid_x]
+					# Set the grid square to occupied
+					temp_res[time][grid_y][grid_x] = hs[time]
+					check_x = (grid_x + 1) * self.grid_size
+					check_y = grid_y * self.grid_size
+					on_left_line = start_x == (check_x - self.grid_size)
+					on_bottom_line = start_y == check_y
+					# Check if the line starts on an edge/corner of a grid square
+					if on_left_line and grid_x > 0:
+						# Check the grid to the left
+						if self.reservations[res_index][grid_y][grid_x - 1] != -1:
+							collision = True
+							col_counter[c_pos[line]] += 1
+							reserved_heading = self.reservations[res_index][grid_y][grid_x - 1]
+						temp_res[time][grid_y][grid_x - 1] = hs[time]
+					if on_bottom_line and grid_y > 0:
+						# Check the grid below
+						if self.reservations[res_index][grid_y - 1][grid_x] != -1:
+							collision = True
+							col_counter[c_pos[line]] += 1
+							reserved_heading = self.reservations[res_index][grid_y - 1][grid_x]
+						temp_res[time][grid_y - 1][grid_x] = hs[time]
+					# Get the slope of the line
+					delta_x = np.around(end_x - start_x, decimals=7)
+					delta_y = np.around(end_y - start_y, decimals=7)
+					if delta_x == 0:
+						m = -float("inf")
+					else:
+						m = np.around(delta_y / delta_x, decimals=10)
+					while check_x <= end_x or check_y >= end_y:
+						# Get the slope to the reference point
+						delta_x = np.around(check_x - start_x, decimals=7)
+						delta_y = np.around(check_y - start_y, decimals=7)
+						if delta_x == 0:
+							temp_m = float("inf")
+						else:
+							temp_m = np.around(delta_y / delta_x, decimals=10)
+						# Update grid coords
+						if temp_m < m:  # Go right
+							grid_x += 1
+							# Check the grid square above, if the line is on the grid line
+							if m == 0 and start_y == check_y + self.grid_size:
+								# Make sure not to mark a grid off the intersection
+								if grid_x >= self.grid_length or grid_y >= self.grid_length:
+									break
+								if self.reservations[res_index][grid_y + 1][grid_x] != -1:
+									collision = True
+									col_counter[c_pos[line]] += 1
+									reserved_heading = self.reservations[res_index][grid_y + 1][grid_x]
+								temp_res[time][grid_y + 1][grid_x] = hs[time]
+						elif temp_m > m:  # Go down
+							grid_y -= 1
+						else:  # Go down and right
+							grid_x += 1
+							grid_y -= 1
+							# Make sure we are not trying to mark a grid off the intersection
+							if grid_x >= self.grid_length or grid_y < 0:
+								break
+							# Check the grid squares next to this one
+							if self.reservations[res_index][grid_y + 1][grid_x] != -1:
+								collision = True
+								col_counter[c_pos[line]] += 1
+								reserved_heading = self.reservations[res_index][grid_y + 1][grid_x]
+							if self.reservations[res_index][grid_y][grid_x - 1] != -1:
+								collision = True
+								col_counter[c_pos[line]] += 1
+								reserved_heading = self.reservations[res_index][grid_y][grid_x - 1]
+							temp_res[time][grid_y + 1][grid_x] = hs[time]
+							temp_res[time][grid_y][grid_x - 1] = hs[time]
+						# Make sure we are not trying to mark a grid off the intersection
+						if grid_x >= self.grid_length or grid_y < 0:
+							break
+						# Check if it is already occupied
+						if self.reservations[res_index][grid_y][grid_x] != -1:
+							collision = True
+							col_counter[c_pos[line]] += 1
+							reserved_heading = self.reservations[res_index][grid_y][grid_x]
+						# Set the grid space to occupied
+						temp_res[time][grid_y][grid_x] = hs[time]
+						# Get the next reference point
+						check_x = (grid_x + 1) * self.grid_size
+						check_y = grid_y * self.grid_size
+					# if collision:
+					# 	break
+					line += 1
+				# Stop if there was a collision
+				if collision:
+					break
+			# Draw positive sloped lines right-left/top-bottom
+			else:
+				# Vertical lines
+				for j in [1, 3]:
+					# Get the starting and ending x, y coords
+					start_x = np.around(box[points[j]][0][0], decimals=10)
+					start_y = np.around(box[points[j]][1][0], decimals=10)
+					end_x = np.around(box[points[j - 1]][0][0], decimals=10)
+					end_y = np.around(box[points[j - 1]][1][0], decimals=10)
+					# Get the starting grid coords
+					grid_x = int(math.floor(start_x / self.grid_size))
+					grid_y = int(math.floor(start_y / self.grid_size))
+					# Check that the grid position is valid
+					if grid_x < 0 or grid_x >= self.grid_length:
+						continue
+					if grid_y < 0 or grid_y >= self.grid_length:
+						continue
+					# Check if it is already occupied
+					if self.reservations[res_index][grid_y][grid_x] != -1:
+						collision = True
+						col_counter[c_pos[line]] += 1
+						reserved_heading = self.reservations[res_index][grid_y][grid_x]
+					# Set the grid square to occupied
+					temp_res[time][grid_y][grid_x] = hs[time]
+					# Get the reference point
+					check_x = grid_x * self.grid_size
+					check_y = grid_y * self.grid_size
+					# Check if the line is on the edge/corner of a grid square
+					if start_x == check_x and grid_x > 0:
+						# Check the grid to the left
+						if self.reservations[res_index][grid_y][grid_x - 1] != -1:
+							collision = True
+							col_counter[c_pos[line]] += 1
+							reserved_heading = self.reservations[res_index][grid_y][grid_x - 1]
+						temp_res[time][grid_y][grid_x - 1] = hs[time]
+					while check_y >= end_y:
+						grid_y -= 1
+						# Make sure we are not trying to mark a grid off the intersection
+						if grid_y < 0:
+							break
+						# Check if the line is on the edge of a grid square
+						if start_x == check_x and grid_x > 0:
+							# Check the grid to the left
+							if self.reservations[res_index][grid_y][grid_x - 1] != -1:
+								collision = True
+								col_counter[c_pos[line]] += 1
+								reserved_heading = self.reservations[res_index][grid_y][grid_x - 1]
+							temp_res[time][grid_y][grid_x - 1] = hs[time]
+						# Check if the current grid is already occupied
+						if self.reservations[res_index][grid_y][grid_x] != -1:
+							collision = True
+							col_counter[c_pos[line]] += 1
+							reserved_heading = self.reservations[res_index][grid_y][grid_x]
+						# Set the grid square to occupied
+						temp_res[time][grid_y][grid_x] = hs[time]
+						# Get the next reference point
+						check_x = grid_x * self.grid_size
+						check_y = grid_y * self.grid_size
+					# if collision:
+					# 	break
+					line += 1
+				# Stop if there was a collision
+				# if collision:
+				# 	break
+
+				# Horizontal lines
+				for j in [2, 3]:
+					# Get the starting and ending x, y coords
+					start_x = np.around(box[points[j]][0][0], decimals=10)
+					start_y = np.around(box[points[j]][1][0], decimals=10)
+					end_x = np.around(box[points[j - 2]][0][0], decimals=10)
+					end_y = np.around(box[points[j - 2]][1][0], decimals=10)
+					# Get the starting grid coords
+					grid_x = int(math.floor(start_x / self.grid_size))
+					grid_y = int(math.floor(start_y / self.grid_size))
+					# Check that the grid position is valid
+					if grid_x < 0 or grid_x >= self.grid_length:
+						continue
+					if grid_y < 0 or grid_y >= self.grid_length:
+						continue
+					# Check if it is already occupied
+					if self.reservations[res_index][grid_y][grid_x] != -1:
+						collision = True
+						col_counter[c_pos[line]] += 1
+						reserved_heading = self.reservations[res_index][grid_y][grid_x]
+					# Set the grid square to occupied
+					temp_res[time][grid_y][grid_x] = hs[time]
+					# Get the next reference point
+					check_x = grid_x * self.grid_size
+					check_y = grid_y * self.grid_size
+					# Check if the line is on the edge of a grid square
+					if start_y == check_y and grid_y > 0:
+						# Check the grid below
+						if self.reservations[res_index][grid_y - 1][grid_x] != -1:
+							collision = True
+							col_counter[c_pos[line]] += 1
+							reserved_heading = self.reservations[res_index][grid_y - 1][grid_x]
+						temp_res[time][grid_y - 1][grid_x] = hs[time]
+					while check_x >= end_x:
+						grid_x -= 1
+						# Make sure we are not trying to mark a grid off the intersection
+						if grid_x < 0:
+							break
+						# Check if the line is on the edge of a grid square
+						if start_y == check_y and grid_y > 0:
+							# Check the grid below
+							if self.reservations[res_index][grid_y - 1][grid_x] != -1:
+								collision = True
+								col_counter[c_pos[line]] += 1
+								reserved_heading = self.reservations[res_index][grid_y - 1][grid_x]
+							temp_res[time][grid_y - 1][grid_x] = hs[time]
+						# Check if it is already occupied
+						if self.reservations[res_index][grid_y][grid_x] != -1:
+							collision = True
+							col_counter[c_pos[line]] += 1
+							reserved_heading = self.reservations[res_index][grid_y][grid_x]
+						# Set the grid square to occupied
+						temp_res[time][grid_y][grid_x] = hs[time]
+						# Get the next reference point
+						check_x = grid_x * self.grid_size
+						check_y = grid_y * self.grid_size
+					# if collision:
+					# 	break
+					line += 1
+				# Stop if there was a collision
+				if collision:
+					break
+		return collision, time, col_counter, reserved_heading, temp_res[0:time], indices[0:time]
+
+	def __createFullTrajectory(self, car, desired_velo):
 		"""
 		:param car = the car we will look at to see if the reservation can be accepted
 		:param desired_velo = the desired velocity for the car by the end of the path
