@@ -308,10 +308,10 @@ def main():
 	np.random.seed(1)
 	global x_states, y_states, h_states, timestep_size, num_cars, tSafe, time_to_complete, end_time, dMax, dSafe, lane_width
 	timestep_size = 0.1 # Must be a float
-	num_cars = 40.0 # Must be a float
+	num_cars = 100.0 # Must be a float
 	tSafe = 0.5 # Must be a float
-	time_to_complete = 50.0 # Must be a float
-	end_time = 100.0 # Must be a float
+	time_to_complete = 20.0 # Must be a float
+	end_time = 90.0 # Must be a float
 	cars_spawned = []
 	dMax = 148 
 	dSafe = 2

@@ -134,6 +134,14 @@ class IntersectionManager:
 		return success, xs, ys, headings, vs, ts
 
 	def __ourPolicy(self, car, desired_velo):
+
+		############################################################################################################
+		###
+		### TODO: Figure out why cars are jumping to the bottom left corner
+		### 	  * I think it has to do with starting in the middle of the intersection when creating a trajectory
+		###
+		############################################################################################################
+
 		# First check the path using the desired_velo
 		xs, ys, hs, vs, ts = self.__createFullTrajectory(car, desired_velo)
 		collision, col_time_index, col_counter, col_direction, col_temp_res, col_indices = self.__collisionDetection(xs, ys, hs, ts, car)
@@ -145,6 +153,9 @@ class IntersectionManager:
 				self.reservations[col_indices[i]] = col_temp_res[i]
 			success = True
 			return success, xs, ys, hs, vs, ts
+		# else:
+		# 	success = False
+		# return success, xs, ys, hs, vs, ts
 
 
 		# If it fails create path based from start to point of collision where car speeds up or slows down
@@ -190,7 +201,8 @@ class IntersectionManager:
 				col_y = ys[i]
 				col_h = hs[i]
 			col_xs, col_ys, col_hs, col_vs, col_ts = self.__createPartTrajectory(car, car.x, car.y, car.heading, car.vel, car.t, None, col_x, col_y, col_h, col_t)
-
+			if len(col_xs) == 0:
+				continue
 			# Check this path
 			collision, col_time_index, col_counter, col_direction, col_temp_res, col_indices = self.__collisionDetection(col_xs, col_ys, col_hs, col_ts, car)
 
@@ -478,6 +490,8 @@ class IntersectionManager:
 		return success, xs, ys, hs, vs, ts
 
 	def __collisionDetection(self, xs, ys, hs, ts, car):
+		if len(xs) == 0:
+			return False, -1, [0, 0, 0, 0], -1, [], []
 		car_w = car.width
 		car_l = car.length
 
@@ -1446,6 +1460,9 @@ class IntersectionManager:
 			delta_t = final_t - start_t
 			v = ((2 * distance) / delta_t) - start_v
 			accel = (v - start_v) / delta_t
+			# Make sure the car is not trying to travel faster than it can
+			if v > car.max_V:
+				return [], [], [], [], []
 
 		####################### Section 1: Straight path from dMax to intersetion ##########################
 		if heading == 0:
@@ -1690,25 +1707,25 @@ class IntersectionManager:
 					return xs, ys, hs, vs, ts
 
 		elif lane == 2 and start_h != final_h:		# Turning Left
-			if heading == 0:
+			if heading == 0 or (heading > 270 and heading < 360):
 				center_x = self.dMax
 				center_y = self.dMax
 				end_x = self.dMax
 				end_y = self.intersection_size - self.dMax - (self.lane_width * 2.5)
 				end_h = 270
-			elif heading == 90:
+			elif heading <= 90 and heading > 0:
 				center_x = self.dMax
 				center_y = self.intersection_size - self.dMax
 				end_x = self.intersection_size - self.dMax - (self.lane_width * 2.5)
 				end_y = self.intersection_size - self.dMax
 				end_h = 0
-			elif heading == 180:
+			elif heading <= 180 and heading > 90:
 				center_x = self.intersection_size - self.dMax
 				center_y = self.intersection_size - self.dMax
 				end_x = self.intersection_size - self.dMax
 				end_y = self.dMax + (self.lane_width * 2.5)
 				end_h = 90
-			elif heading == 270:
+			elif heading <= 270 and heading > 180:
 				center_x = self.intersection_size - self.dMax
 				center_y = self.dMax
 				end_x = self.dMax + (self.lane_width * 2.5)
