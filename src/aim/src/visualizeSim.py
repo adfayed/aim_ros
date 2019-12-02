@@ -280,21 +280,27 @@ def main(car_list, dMax, lane_width, timestep_size, end_time):
                             marker_temp.pose.position.x = car_list[i].x[j]
                             marker_temp.pose.position.y = car_list[i].y[j]
                             marker_temp.pose.orientation = Quaternion(*tf.transformations.quaternion_from_euler(0, 0, float(math.radians(-car_list[i].heading[j]))))
-                            if car_list[i].following[j]:
-                                marker_temp.color.r = 0.0
-                                marker_temp.color.g = 0.0
-                                marker_temp.color.b = 1.0
-                            else:
-                                marker_temp.color.r = 1.0
-                                marker_temp.color.g = 0.0
-                                marker_temp.color.b = 0.0
                             if car_list[i].reservation[j]:
-                                marker_temp.color.r = 0.0 
-                                marker_temp.color.g = 1.0
-                                marker_temp.color.b = 0.0       
+                                if car_list[i].following[j]:
+                                    marker_temp.color.r = 0.0
+                                    marker_temp.color.g = 1.0
+                                    marker_temp.color.b = 1.0
+                                else:
+                                    marker_temp.color.r = 0.0
+                                    marker_temp.color.g = 1.0
+                                    marker_temp.color.b = 0.0
+                            else:
+                                if car_list[i].following[j]:
+                                    marker_temp.color.r = 0.0
+                                    marker_temp.color.g = 0.0
+                                    marker_temp.color.b = 1.0
+                                else:
+                                    marker_temp.color.r = 1.0
+                                    marker_temp.color.g = 0.0
+                                    marker_temp.color.b = 0.0       
                         elif viz_time*timestep_size > round(car_list[i].t[-1],2):
-                            marker_temp.pose.position.x = 0
-                            marker_temp.pose.position.y = 0
+                            marker_temp.pose.position.x = 2*dMax+6*lane_width
+                            marker_temp.pose.position.y = 2*dMax+6*lane_width
             marker_array.markers.append(marker_temp)
         pub.publish(marker_array)
         viz_time = viz_time + 1
