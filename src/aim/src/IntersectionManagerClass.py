@@ -144,20 +144,23 @@ class IntersectionManager:
 			for i in range(len(col_indices)):
 				self.reservations[col_indices[i]] = col_temp_res[i]
 			success = True
-			# return success, xs, ys, hs, vs, ts
-		else:
-			success = False
-		return success, xs, ys, hs, vs, ts
+			return success, xs, ys, hs, vs, ts
 
 
 		# If it fails create path based from start to point of collision where car speeds up or slows down
-		slow_down = False
+		slow_down = True
 		##############################################################
 		###
 		### TODO: Determine if the car needs to slow down or speed up
 		###
 		##############################################################
-		
+
+		######################################################################
+		###
+		### TODO: Handle if the collision happens with a car in the same lane
+		###
+		######################################################################
+
 		tries = 0		# Indicates which attempt this is
 		while True:
 			if tries == 1:
@@ -178,7 +181,7 @@ class IntersectionManager:
 			else:
 				# Time to check if clear
 				col_t = ts[col_time_index]
-				i = new_col_time_index + 1		# The index for the position and heading arrays to check for collisions
+				i = col_time_index + 1		# The index for the position and heading arrays to check for collisions
 				while collision:
 					collision, col_time_index, col_counter, col_direction, col_temp_res, col_indices = self.__collisionDetection([xs[i]], [ys[i]], [hs[i]], [col_t], car)
 					if collision:
@@ -186,7 +189,7 @@ class IntersectionManager:
 				col_x = xs[i]
 				col_y = ys[i]
 				col_h = hs[i]
-			col_xs, col_ys, col_hs, col_vs, col_ts = self.__createPartTrajectory(car, car.x, car.y, car.heading, car.vel, car.t, col_x, col_y, col_h, col_t)
+			col_xs, col_ys, col_hs, col_vs, col_ts = self.__createPartTrajectory(car, car.x, car.y, car.heading, car.vel, car.t, None, col_x, col_y, col_h, col_t)
 
 			# Check this path
 			collision, col_time_index, col_counter, col_direction, col_temp_res, col_indices = self.__collisionDetection(col_xs, col_ys, col_hs, col_ts, car)
@@ -194,7 +197,7 @@ class IntersectionManager:
 			# If this new path works, check path from collision point to finish point using desired velo
 			if not collision:
 				i = len(col_xs) - 1
-				end_xs, end_ys, end_hs, end_vs, end_ts = self.__createPartTrajectory(car, desired_velo, col_xs[i], col_ys[i], col_hs[i], col_vs[i], col_ts[i])
+				end_xs, end_ys, end_hs, end_vs, end_ts = self.__createPartTrajectory(car, col_xs[i], col_ys[i], col_hs[i], col_vs[i], col_ts[i], desired_velo)
 				collision, col_time_index, col_counter, col_direction, end_temp_res, end_indices = self.__collisionDetection(end_xs, end_ys, end_hs, end_ts, car)
 
 				# If this end portion works, return entire path as success
@@ -213,7 +216,7 @@ class IntersectionManager:
 					return success, final_xs, final_ys, final_hs, final_vs, final_ts
 
 				# If this end portion fails, try end portion using the final velocity of the portion above
-				end_xs, end_ys, end_hs, end_vs, end_ts = self.__createPartTrajectory(car, col_vs[i], col_xs[i], col_ys[i], col_hs[i], col_vs[i], col_ts[i])
+				end_xs, end_ys, end_hs, end_vs, end_ts = self.__createPartTrajectory(car, col_xs[i], col_ys[i], col_hs[i], col_vs[i], col_ts[i], col_vs[i])
 				collision, col_time_index, col_counter, col_direction, end_temp_res, end_indices = self.__collisionDetection(end_xs, end_ys, end_hs, end_ts, car)
 
 				# If this end portion works, return entire path
@@ -1288,6 +1291,559 @@ class IntersectionManager:
 		# Return the trajectory
 		return xs, ys, hs, vs, ts
 
+	def __createPartTrajectory(self, car, start_x, start_y, start_h, start_v, start_t, desired_velo, final_x = -1, final_y = -1, final_h = -1, final_t = -1):
+		# Initialize our lists
+		xs = [start_x]
+		ys = [start_y]
+		heading = start_h
+		hs = [heading]
+		velo = start_v
+		vs = [velo]
+		t = start_t
+		ts = [t]
+
+		# Determine what the acceleration should be for the vehicle
+		######################################################
+		###
+		### TODO: Figure out best way to calculate accel here
+		###
+		######################################################
+		if desired_velo != None:
+			delta_v = desired_velo - velo
+			if delta_v >= 0:
+				accel = min(car.max_A, delta_v / 5)
+				speeding_up = True
+			else:
+				accel = max(-car.min_A, delta_v / 5)
+				speeding_up = False
+		else:
+			lane = car.lane_id % 3
+			distance = 0
+			if car.heading == 0:
+				# Add the first straight portion if there is any
+				if start_y < self.dMax:
+					if final_y <= self.dMax:
+						distance += abs(start_y - final_y)
+					else:
+						distance += abs(start_y - self.dMax)
+				# Add the middle and final portion if there is any
+				if lane == 0:		# Turning right
+					arc_measure = abs(final_h - start_h)
+					distance += (arc_measure * 2 * np.pi * (self.lane_width / 2)) / 360.0
+					# Add the final straigh portion
+					if final_x > self.intersection_size - self.dMax:
+						if start_x > self.intersection_size - self.dMax:
+							distance += abs(final_x - start_x)
+						else:
+							distance += abs(final_x - (self.intersection_size - self.dMax))
+				elif lane == 1:		# Going straight
+					if start_y >= self.dMax:
+						distance += abs(final_y - start_y)
+					elif final_y >= self.dMax:
+						distance += abs(final_y - self.dMax)
+				elif lane == 2:		# Turning left
+					arc_measure = abs(final_h - start_h)
+					distance += (arc_measure * 2 * np.pi * (self.lane_width * 3.5)) / 360.0
+					# Add the final straigh portion
+					if final_x < self.dMax:
+						if start_x < self.dMax:
+							distance += abs(start_x - final_x)
+						else:
+							distance += abs(self.dMax - final_x)
+			elif car.heading == 90:
+				# Add the first straight portion if there is any
+				if start_x  < self.dMax:
+					if final_x < self.dMax:
+						distance += abs(final_x - start_x)
+					else:
+						distance += abs(self.dMax - start_x)
+				# Add the middle and final portion if there is any
+				if lane == 0:		# Turning right
+					arc_measure = abs(final_h - start_h)
+					distance += (arc_measure * 2 * np.pi * (self.lane_width / 2)) / 360.0
+					# Add the final straigh portion
+					if final_y < self.dMax:
+						if start_y < self.dMax:
+							distance += abs(start_y - final_y)
+						else:
+							distance += abs(self.dMax - final_y)
+				elif lane == 1:		# Going straight
+					if start_x >= self.dMax:
+						distance += abs(final_x - start_x)
+					elif final_x >= self.dMax:
+						distance += abs(final_x - self.dMax)
+				elif lane == 2:		# Turning left
+					arc_measure = abs(final_h - start_h)
+					distance += (arc_measure * 2 * np.pi * (self.lane_width * 3.5)) / 360.0
+					# Add the final straigh portion
+					if final_y > self.intersection_size - self.dMax:
+						if start_y > self.intersection_size - self.dMax:
+							distance += abs(final_y - start_y)
+						else:
+							distance += abs(final_y - (self.intersection_size - self.dMax))
+			elif car.heading == 180:
+				# Add the first straight portion if there is any
+				if start_y > self.intersection_size - self.dMax:
+					if final_y > self.intersection_size - self.dMax:
+						distance += abs(start_y - final_y)
+					else:
+						distance += abs(start_y - self.intersection_size - self.dMax)
+				# Add the middle and final portion if there is any
+				if lane == 0:		# Turning right
+					arc_measure = abs(final_h - start_h)
+					distance += (arc_measure * 2 * np.pi * (self.lane_width / 2)) / 360.0
+					# Add the final straigh portion
+					if final_x < self.dMax:
+						if start_x < self.dMax:
+							distance += abs(start_x - final_x)
+						else:
+							distance += abs(self.dMax - final_x)
+				elif lane == 1:		# Going straight
+					if start_y <= self.intersection_size - self.dMax:
+						distance += abs(start_y - final_y)
+					elif final_y <= self.intersection_size - self.dMax:
+						distance += abs(self.intersection_size - self.dMax - final_y)
+				elif lane == 2:		# Turning left
+					arc_measure = abs(final_h - start_h)
+					distance += (arc_measure * 2 * np.pi * (self.lane_width * 3.5)) / 360.0
+					# Add the final straigh portion
+					if final_x > self.intersection_size - self.dMax:
+						if start_x >= self.intersection_size - self.dMax:
+							distance += abs(final_x - start_x)
+						else:
+							distance += abs(final_x - (self.intersection_size - self.dMax))
+			elif car.heading == 270:
+				# Add the first straight portion if there is any
+				if start_x > self.intersection_size - self.dMax:
+					if final_x > self.intersection_size - self.dMax:
+						distance += abs(start_x - final_x)
+					else:
+						distance += abs(start_x - self.intersection_size - self.dMax)
+				# Add the middle and final portion if there is any
+				if lane == 0:		# Turning right
+					arc_measure = abs(final_h - start_h)
+					distance += (arc_measure * 2 * np.pi * (self.lane_width / 2)) / 360.0
+					# Add the final straigh portion
+					if final_y > self.intersection_size - self.dMax:
+						if start_y > self.intersection_size - self.dMax:
+							distance += abs(final_y - start_y)
+						else:
+							distance += abs(final_y - self.intersection_size - self.dMax)
+				elif lane == 1:		# Going straight
+					if start_x <= self.intersection_size - self.dMax:
+						distance += abs(start_x - final_x)
+					elif final_x <= self.intersection_size - self.dMax:
+						distance += abs(self.intersection_size - self.dMax - final_x)
+				elif lane == 2:		# Turning left
+					arc_measure = abs(final_h - start_h)
+					distance += (arc_measure * 2 * np.pi * (self.lane_width * 3.5)) / 360.0
+					# Add the final straigh portion
+					if final_y < self.dMax:
+						if start_y <= self.dMax:
+							distance += abs(final_y - start_y)
+						else:
+							distance += abs(self.dMax - final_y)
+			delta_t = final_t - start_t
+			v = ((2 * distance) / delta_t) - start_v
+			accel = (v - start_v) / delta_t
+
+		####################### Section 1: Straight path from dMax to intersetion ##########################
+		if heading == 0:
+			delta_x = 0		# Indicates how x values change
+			delta_y = 1		# Indicates how y values change
+			end_x = car.x		# The goal x value
+			end_y = self.dMax		# The goal y value
+			increasing = True		# Indicates if the value we will check is increasing
+		elif heading == 90:
+			delta_x = 1
+			delta_y = 0
+			end_x = self.dMax
+			end_y = car.y
+			increasing = True
+		elif heading == 180:
+			delta_x = 0
+			delta_y = -1
+			end_x = car.x
+			end_y = self.intersection_size - self.dMax
+			increasing = False
+		elif heading == 270:
+			delta_x = -1
+			delta_y = 0
+			end_x = self.intersection_size - self.dMax
+			end_y = car.y
+			increasing = False
+		else:
+			delta_x = 0
+			delta_y = 0
+			end_x = -1
+			end_y = -1
+			increasing = True
+
+		new_x = start_x		# Get the current x of the car
+		new_y = start_y		# Get the current y of the car
+		time_left = 0		# Indicates how much time is left if the car finishes the section without using the whole timestep
+		if (increasing and new_x > end_x) or (not increasing and new_x < end_x) or (increasing and new_y > end_y) or (not increasing and new_y < new_y):
+			time_left = self.timestep
+		while time_left == 0:
+			# Get the new x and y values based on the velocity and acceleration of the car
+			new_x, new_y = self.__nextStraightPoint(new_x, new_y, velo, accel, delta_x, delta_y, self.timestep)
+			# Check if the car has passed its goal in the x direction
+			if (increasing and new_x > end_x) or (not increasing and new_x < end_x):
+				dist_traveled = abs(xs[len(xs) - 1] - end_x)		# The distance from the last point to the goal
+				final_v = np.sqrt(velo**2 + 2 * accel * dist_traveled)
+				time_left = self.timestep - ((dist_traveled * 2) / (final_v + velo))		# How much longer to finish this timestep in the next section
+				new_x = end_x		# Make sure the car is at its goal position
+			# Check if the car has passed its goal in the y direction
+			if (increasing and new_y > end_y) or (not increasing and new_y < end_y):
+				dist_traveled = abs(ys[len(ys) - 1] - end_y)		# The distance from the last point to the goal
+				final_v = np.sqrt(velo**2 + 2 * accel * dist_traveled)
+				time_left = self.timestep - ((dist_traveled * 2) / (final_v + velo))
+				new_y = end_y		# Make sure the car is at its goal position
+			# Update the velocity of the car
+			velo += accel * (self.timestep - time_left)
+			# Set acceleration to 0 if the car is at its desired velocity
+			if desired_velo != None and ((speeding_up and velo >= desired_velo) or (not speeding_up and velo <= desired_velo)):
+				accel = 0
+			# We can add the new points if the car finished the timestep
+			if time_left == 0:
+				xs.append(new_x)
+				ys.append(new_y)
+				hs.append(heading)
+				vs.append(velo)
+				t += self.timestep
+				t = np.around(t, decimals=10)
+				ts.append(t)
+
+			# Check if the car has reached the final point of the trajectory ..... Do we need to check if there is still time remaining?
+			if final_x != -1 and ((increasing and new_x >= final_x) or (not increasing and new_x <= final_x)):
+				return xs, ys, hs, vs, ts
+			if final_y != -1 and ((increasing and new_y >= final_y) or (not increasing and new_y <= final_y)):
+				return xs, ys, hs, vs, ts
+
+		####################### Section 2: Intersection path (Turn Left, Straight, Turn Right ##########################
+		lane = car.lane_id % 3
+		if lane == 0 and start_h != final_h:		# Turning right
+			if heading >= 0 and heading < 90:
+				center_x = self.intersection_size - self.dMax		# X value of the circle path the turn follows
+				center_y = self.dMax								# Y value of the circle path the turn follows
+				end_x = self.intersection_size - self.dMax			# Goal's x value
+				end_y = self.dMax + (self.lane_width / 2)			# Goal's y value
+				end_h = 90											# Goal's heading
+			elif heading >= 90 and heading < 180:
+				center_x = self.dMax
+				center_y = self.dMax
+				end_x = self.dMax + (self.lane_width / 2)
+				end_y = self.dMax
+				end_h = 180
+			elif heading >= 180 and heading < 270:
+				center_x = self.dMax
+				center_y = self.intersection_size - self.dMax
+				end_x = self.dMax
+				end_y = self.intersection_size - self.dMax - (self.lane_width / 2)
+				end_h = 270
+			elif heading >= 270 and heading < 360:
+				center_x = self.intersection_size - self.dMax
+				center_y = self.intersection_size - self.dMax
+				end_x = self.intersection_size - self.dMax - (self.lane_width / 2)
+				end_y = self.intersection_size - self.dMax
+				end_h = 360		# Use 360 instead of 0 for mathematical purposes, Updates to 0 later
+			else:
+				center_x = 0
+				center_y = 0
+				end_x = -1
+				end_y = -1
+				end_h = 0
+
+			# Account for the leftover time from the last section
+			new_x, new_y, new_h = self.__nextRightPoint(heading, velo, accel, time_left, center_x, center_y)
+			velo += accel * time_left
+			if desired_velo != None and ((speeding_up and velo >= desired_velo) or (not speeding_up and velo <= desired_velo)):
+				accel = 0
+			xs.append(new_x)
+			ys.append(new_y)
+			hs.append(new_h)
+			vs.append(velo)
+			t += self.timestep
+			t = np.around(t, decimals=10)
+			ts.append(t)
+			time_left = 0
+
+			# Return if reached final position
+			if final_h != -1 and new_h >= final_h:
+				return xs, ys, hs, vs, ts
+
+			while time_left == 0:
+				new_x, new_y, new_h = self.__nextRightPoint(new_h, velo, accel, self.timestep, center_x, center_y)
+				# Check if the car passes its goal point
+				if new_h > end_h:
+					radius = self.lane_width		# Radius of circle path
+					delta_h = end_h - hs[len(hs) - 1]
+					dist_traveled = (delta_h / 360) * (2 * np.pi * radius)
+					final_v = np.sqrt(velo**2 + 2 * accel * dist_traveled)
+					time_left = self.timestep - ((dist_traveled * 2) / (final_v + velo))
+					new_x = end_x
+					new_y = end_y
+					if end_h == 360:
+						new_h = 0
+					else:
+						new_h = end_h
+					heading = new_h
+				velo += accel * (self.timestep - time_left)
+				if desired_velo != None and ((speeding_up and velo >= desired_velo) or (not speeding_up and velo <= desired_velo)):
+					accel = 0
+				if time_left == 0:
+					xs.append(new_x)
+					ys.append(new_y)
+					hs.append(new_h)
+					vs.append(velo)
+					t += self.timestep
+					t = np.around(t, decimals=10)
+					ts.append(t)
+
+				# Return if reached final position
+				if final_h != -1 and new_h >= final_h:
+					return xs, ys, hs, vs, ts
+
+		elif lane == 1:		# Going straight
+			if heading == 0:
+				delta_x = 0
+				delta_y = 1
+				end_x = new_x
+				end_y = self.intersection_size - self.dMax
+				increasing = True
+			elif heading == 90:
+				delta_x = 1
+				delta_y = 0
+				end_x = self.intersection_size - self.dMax
+				end_y = new_y
+				increasing = True
+			elif heading == 180:
+				delta_x = 0
+				delta_y = -1
+				end_x = new_x
+				end_y = self.dMax
+				increasing = False
+			elif heading == 270:
+				delta_x = -1
+				delta_y = 0
+				end_x = self.dMax
+				end_y = new_y
+				increasing = False
+			else:
+				delta_x = 0
+				delta_y = 0
+				end_x = -1
+				end_y = -1
+				increasing = False
+
+			if (increasing and start_x > end_x) or (not increasing and start_x < end_x) or (increasing and start_y > end_y) or (not increasing and start_y < end_y):
+				time_left = self.timestep
+			else:
+				# Account for the leftover time from the last section
+				new_x, new_y = self.__nextStraightPoint(new_x, new_y, velo, accel, delta_x, delta_y, time_left)
+				velo += accel * time_left
+				if desired_velo != None and ((speeding_up and velo >= desired_velo) or (not speeding_up and velo <= desired_velo)):
+					accel = 0
+				xs.append(new_x)
+				ys.append(new_y)
+				hs.append(heading)
+				vs.append(velo)
+				t += self.timestep
+				t = np.around(t, decimals=10)
+				ts.append(t)
+				time_left = 0
+
+			# Check if the car has reached the final point of the trajectory
+			if final_x != -1 and ((increasing and new_x >= final_x) or (not increasing and new_x <= final_x)):
+				return xs, ys, hs, vs, ts
+			if final_y != -1 and ((increasing and new_y >= final_y) or (not increasing and new_y <= final_y)):
+				return xs, ys, hs, vs, ts
+
+			while time_left == 0:
+				new_x, new_y = self.__nextStraightPoint(new_x, new_y, velo, accel, delta_x, delta_y, self.timestep)
+				if (increasing and new_x > end_x) or (not increasing and new_x < end_x):
+					dist_traveled = abs(xs[len(xs) - 1] - end_x)
+					final_v = np.sqrt(velo**2 + 2 * accel * dist_traveled)
+					time_left = self.timestep - ((dist_traveled * 2) / (final_v + velo))
+					new_x = end_x
+				if (increasing and new_y > end_y) or (not increasing and new_y < end_y):
+					dist_traveled = abs(ys[len(ys) - 1] - end_y)
+					final_v = np.sqrt(velo**2 + 2 * accel * dist_traveled)
+					time_left = self.timestep - ((dist_traveled * 2) / (final_v + velo))
+					new_y = end_y
+				velo += accel * (self.timestep - time_left)
+				if desired_velo != None and ((speeding_up and velo >= desired_velo) or (not speeding_up and velo <= desired_velo)):
+					accel = 0
+				if time_left == 0:
+					xs.append(new_x)
+					ys.append(new_y)
+					hs.append(heading)
+					vs.append(velo)
+					t += self.timestep
+					t = np.around(t, decimals=10)
+					ts.append(t)
+
+				# Check if the car has reached the final point of the trajectory ..... Do we need to check if there is still time remaining?
+				if final_x != -1 and ((increasing and new_x >= final_x) or (not increasing and new_x <= final_x)):
+					return xs, ys, hs, vs, ts
+				if final_y != -1 and ((increasing and new_y >= final_y) or (not increasing and new_y <= final_y)):
+					return xs, ys, hs, vs, ts
+
+		elif lane == 2 and start_h != final_h:		# Turning Left
+			if heading == 0:
+				center_x = self.dMax
+				center_y = self.dMax
+				end_x = self.dMax
+				end_y = self.intersection_size - self.dMax - (self.lane_width * 2.5)
+				end_h = 270
+			elif heading == 90:
+				center_x = self.dMax
+				center_y = self.intersection_size - self.dMax
+				end_x = self.intersection_size - self.dMax - (self.lane_width * 2.5)
+				end_y = self.intersection_size - self.dMax
+				end_h = 0
+			elif heading == 180:
+				center_x = self.intersection_size - self.dMax
+				center_y = self.intersection_size - self.dMax
+				end_x = self.intersection_size - self.dMax
+				end_y = self.dMax + (self.lane_width * 2.5)
+				end_h = 90
+			elif heading == 270:
+				center_x = self.intersection_size - self.dMax
+				center_y = self.dMax
+				end_x = self.dMax + (self.lane_width * 2.5)
+				end_y = self.dMax
+				end_h = 180
+			else:
+				center_x = 0
+				center_y = 0
+				end_x = -1
+				end_y = -1
+				end_h = 0
+
+			# Account for the leftover time from the last section
+			new_x, new_y, new_h = self.__nextLeftPoint(heading, velo, accel, time_left, center_x, center_y)
+			velo += accel * time_left
+			if desired_velo != None and ((speeding_up and velo >= desired_velo) or (not speeding_up and velo <= desired_velo)):
+				accel = 0
+			xs.append(new_x)
+			ys.append(new_y)
+			hs.append(new_h)
+			vs.append(velo)
+			t += self.timestep
+			t = np.around(t, decimals=10)
+			ts.append(t)
+			time_left = 0
+
+			# Return if reached final position
+			if final_h != -1 and new_h <= final_h:
+				return xs, ys, hs, vs, ts
+
+			while time_left == 0:
+				new_x, new_y, new_h = self.__nextLeftPoint(new_h, velo, accel, self.timestep, center_x, center_y)
+				if new_h < end_h:
+					radius = self.lane_width * 3.5
+					delta_h = hs[len(hs) - 1] - end_h
+					dist_traveled = (delta_h / 360) * (2 * np.pi * radius)
+					final_v = np.sqrt(velo**2 + 2 * accel * dist_traveled)
+					time_left = self.timestep - ((dist_traveled * 2) / (final_v + velo))
+					new_x = end_x
+					new_y = end_y
+					new_h = end_h
+					heading = new_h
+				velo += accel * (self.timestep - time_left)
+				if desired_velo != None and ((speeding_up and velo >= desired_velo) or (not speeding_up and velo <= desired_velo)):
+					accel = 0
+				if time_left == 0:
+					xs.append(new_x)
+					ys.append(new_y)
+					hs.append(new_h)
+					vs.append(velo)
+					t += self.timestep
+					t = np.around(t, decimals=10)
+					ts.append(t)
+
+				# Return if reached final position
+				if final_h != -1 and new_h <= final_h:
+					return xs, ys, hs, vs, ts
+
+		####################### Section 3: Go straight until dMin ##########################
+		if heading == 0:
+			delta_x = 0
+			delta_y = 1
+			end_x = new_x
+			end_y = self.intersection_size - self.dMax + self.dMin
+			increasing = True
+		elif heading == 90:
+			delta_x = 1
+			delta_y = 0
+			end_x = self.intersection_size - self.dMax + self.dMin
+			end_y = new_y
+			increasing = True
+		elif heading == 180:
+			delta_x = 0
+			delta_y = -1
+			end_x = new_x
+			end_y = self.dMax - self.dMin
+			increasing = False
+		elif heading == 270:
+			delta_x = -1
+			delta_y = 0
+			end_x = self.dMax - self.dMin
+			end_y = new_y
+			increasing = False
+		else:
+			delta_x = 0
+			delta_y = 0
+			end_x = -1
+			end_y = -1
+			increasing = False
+
+		# Account for the leftover time from the last section
+		new_x, new_y = self.__nextStraightPoint(new_x, new_y, velo, accel, delta_x, delta_y, time_left)
+		velo += accel * time_left
+		if desired_velo != None and ((speeding_up and velo >= desired_velo) or (not speeding_up and velo <= desired_velo)):
+			accel = 0
+		xs.append(new_x)
+		ys.append(new_y)
+		hs.append(heading)
+		vs.append(velo)
+		t += self.timestep
+		t = np.around(t, decimals=10)
+		ts.append(t)
+
+		# Check if the car has reached the final point of the trajectory
+		if final_x != -1 and ((increasing and new_x >= final_x) or (not increasing and new_x <= final_x)):
+			return xs, ys, hs, vs, ts
+		if final_y != -1 and ((increasing and new_y >= final_y) or (not increasing and new_y <= final_y)):
+			return xs, ys, hs, vs, ts
+
+		# Continue until the car reaches a point at the goal
+		while True:
+			new_x, new_y = self.__nextStraightPoint(new_x, new_y, velo, accel, delta_x, delta_y, self.timestep)
+			velo += accel * self.timestep
+			if desired_velo != None and ((speeding_up and velo >= desired_velo) or (not speeding_up and velo <= desired_velo)):
+				accel = 0
+			xs.append(new_x)
+			ys.append(new_y)
+			hs.append(heading)
+			vs.append(velo)
+			t += self.timestep
+			t = np.around(t, decimals=10)
+			ts.append(t)
+			if (increasing and new_x > end_x) or (not increasing and new_x < end_x):
+				break
+			if (increasing and new_y > end_y) or (not increasing and new_y < end_y):
+				break
+			# Check if the car has reached the final point of the trajectory
+			if final_x != -1 and ((increasing and new_x >= final_x) or (not increasing and new_x <= final_x)):
+				return xs, ys, hs, vs, ts
+			if final_y != -1 and ((increasing and new_y >= final_y) or (not increasing and new_y <= final_y)):
+				return xs, ys, hs, vs, ts
+
+		# Return the trajectory
+		return xs, ys, hs, vs, ts
+
 	def __nextStraightPoint(self, cur_x, cur_y, cur_v, accel, delta_x, delta_y, timestep):
 		distance = (0.5 * accel * (timestep**2) + (cur_v * timestep))
 		new_x = distance * delta_x + cur_x
@@ -1438,7 +1994,7 @@ def main():
 	dMax = 148
 	dMin = 50
 	timestep = 0.1
-	policy = 2
+	policy = 0
 	IM = IntersectionManager(gsz, dMax, dMin, timestep, lane_width, policy)
 	rospy.spin()
 	# while not rospy.is_shutdown():
