@@ -62,6 +62,38 @@ class car:
 
 		#returns True if exited False otherwise
 
+	def _final_coords(self):
+		for j in range(0, len(self.t)):
+			# South lanes
+			if self.lane_id == 6 and (self.x[j] >= dMax+2.5*lane_width+dMin+10 and self.y[j] >= dMax+0.5*lane_width-0.2):
+				return (self.x[j], self.y[j], self.t[j])
+			elif self.lane_id == 7 and (self.x[j] >= dMax+4.5*lane_width-0.2 and self.y[j] >= dMax+2.5*lane_width+dMin+10):
+				return (self.x[j], self.y[j], self.t[j])
+			elif self.lane_id == 8 and (self.x[j] <= dMax-dMin and self.y[j] >= dMax+3.5*lane_width-0.2):
+				return (self.x[j], self.y[j], self.t[j])
+			# East lanes		
+			elif self.lane_id == 3 and (self.x[j] >= dMax+5.5*lane_width-0.2 and self.y[j] >= dMax+2.5*lane_width+dMin+10):
+				return (self.x[j], self.y[j], self.t[j])
+			elif self.lane_id == 4 and (self.x[j] <= dMax-dMin and self.y[j] >= dMax+4.5*lane_width-0.2):
+				return (self.x[j], self.y[j], self.t[j])
+			elif self.lane_id == 5 and (self.x[j] >= dMax+2.5*lane_width-0.2 and self.y[j] <= dMax-dMin):
+				return (self.x[j], self.y[j], self.t[j])
+			# North lanes
+			elif self.lane_id == 0 and (self.x[j] <= dMax-dMin and self.y[j] >= dMax+5.5*lane_width-0.2):
+				return (self.x[j], self.y[j], self.t[j])
+			elif self.lane_id == 1 and (self.x[j] >= dMax+1.5*lane_width-0.2 and self.y[j] <= dMax-dMin):
+				return (self.x[j], self.y[j], self.t[j])
+			elif self.lane_id == 2 and (self.x[j] >= dMax+2.5*lane_width+dMin+10 and self.y[j] >= dMax+2.5*lane_width-0.2):
+				return (self.x[j], self.y[j], self.t[j])
+			# West lanes
+			elif self.lane_id == 9 and (self.x[j] >= dMax+0.5*lane_width-0.2 and self.y[j] <= dMax-dMin):
+				return (self.x[j], self.y[j], self.t[j])
+			elif self.lane_id == 10 and (self.x[j] >= dMax+2.5*lane_width+dMin+10 and self.y[j] >= dMax+1.5*lane_width-0.2):
+				return (self.x[j], self.y[j], self.t[j])
+			elif self.lane_id == 11 and (self.x[j] >= dMax+3.5*lane_width-0.2 and self.y[j] >= dMax+2.5*lane_width+dMin+10):
+				return (self.x[j], self.y[j], self.t[j])
+		# returns x, y, t
+
 	def _expected_vel(self, t_index, stopping_distance):
 		nominal_dist = dMax
 		nominal_decel = (-self.vel[0] / (2*dMax/self.vel[0]))
@@ -182,15 +214,60 @@ class car:
 						self.following[t_index] = True
 					else:
 						self.acc[t_index] = line_speedup_acc
-
-		# if self.vel[t_index] <= 2:
-		# 	self.vel[t_index] = 0
-		# 	self.acc[t_index] = 0
-
+            
 
 class carManager:
 	def __init__(self, car_list = []):
 		self.car_list = car_list
+
+	def calculate_delay(self):
+		tot_delay = 0.0
+		num_compl_cars = 0.0
+		for i in range(0,len(self.car_list)):
+			if self.car_list[i].reservation.any():
+				num_compl_cars = num_compl_cars + 1
+				# Find final coords and time
+				fin_x, fin_y, fin_t = self.car_list[i]._final_coords()
+				# South lanes
+				if self.car_list[i].lane_id == 6:
+					dist_traveled = dMax + 1.437 + (fin_x - (dMax + 6*lane_width))
+				elif self.car_list[i].lane_id == 7:
+					dist_traveled = fin_y
+				elif self.car_list[i].lane_id == 8:
+					dist_traveled = dMax + 10.061 + (dMax - fin_x)
+				# East lanes		
+				elif self.car_list[i].lane_id == 3:
+					dist_traveled = dMax + 1.437 + (fin_y - (dMax + 6*lane_width))
+				elif self.car_list[i].lane_id == 4:
+					dist_traveled = (2*dMax+6*lane_width) - fin_x
+				elif self.car_list[i].lane_id == 5:
+					dist_traveled = dMax + 10.061 + (dMax - fin_y)
+				# North lanes
+				elif self.car_list[i].lane_id == 0:
+					dist_traveled = dMax + 1.437 + (dMax - fin_x)
+				elif self.car_list[i].lane_id == 1:
+					dist_traveled = (2*dMax+6*lane_width) - fin_y
+				elif self.car_list[i].lane_id == 2:
+					dist_traveled = dMax + 10.061 + (fin_x - (dMax + 6*lane_width))
+				# West lanes
+				elif self.car_list[i].lane_id == 9:
+					dist_traveled = dMax + 1.437 + (dMax - fin_y)
+				elif self.car_list[i].lane_id == 10:
+					dist_traveled = fin_x
+				elif self.car_list[i].lane_id == 11:
+					dist_traveled = dMax + 10.061 + (fin_y - (dMax + 6*lane_width))
+
+				# No Delay Time
+				no_delay_time = self.car_list[i].vel[0]/dist_traveled
+
+				# Difference in Delay
+				delay = fin_t - no_delay_time
+				tot_delay = tot_delay + delay
+			else:
+				print("Car: ", self.car_list[i].car_id," never got a reservation so it is not being considered.")
+		avg_delay = (tot_delay / num_compl_cars)
+		return round(avg_delay,3)
+		# returns average delay of all cars compared to no intersection and no slowing down
 
 	def update(self, time):
 		time = round(time, 3)
@@ -212,8 +289,6 @@ class carManager:
 						self.car_list[i].max_V,	self.car_list[i].max_A, self.car_list[i].min_A, self.car_list[i].max_lateral_g)
 					if response[0]: 
 						print("Request accepted for Car: ",self.car_list[i].car_id," At time: ",time)
-						# if self.car_list[i].lane_id == 1:
-						# 	print("Car %d is in lane 1" %(self.car_list[i].car_id))
 						self.car_list[i].reservation = np.append(self.car_list[i].reservation[0:curr_t_index], np.ones(len(response[1]),dtype=bool))
 						self.car_list[i].x = np.append(self.car_list[i].x[0:curr_t_index], response[1])
 						self.car_list[i].y = np.append(self.car_list[i].y[0:curr_t_index], response[2])
@@ -308,7 +383,7 @@ def main():
 	#warnings.filterwarnings("ignore")
 	# ----------------------------- Sim configurations ------------------------------
 	np.random.seed(1)
-	global x_states, y_states, h_states, timestep_size, num_cars, tSafe, time_to_complete, end_time, dMax, dSafe, lane_width
+	global x_states, y_states, h_states, timestep_size, num_cars, tSafe, time_to_complete, end_time, dMax, dSafe, lane_width, dMin
 	timestep_size = 0.1 # Must be a float
 	num_cars = 100.0 # Must be a float
 	tSafe = 0.5 # Must be a float
@@ -316,6 +391,7 @@ def main():
 	end_time = 100.0 # Must be a float
 	cars_spawned = []
 	dMax = 148 
+	dMin = 50
 	dSafe = 2
 	lane_width = 3.66 
 	x_states = {0: dMax+0.5*lane_width,
@@ -370,16 +446,14 @@ def main():
 	#pdb.set_trace()
 	while not rospy.is_shutdown():
 		cm.update(sim_time)
-		sim_time = round(sim_time + timestep_size, 2)
-		if round(sim_time,3) >= end_time + timestep_size:		# or round(sim_time,3) >= 11.5:
-			#pdb.set_trace()
+		sim_time = sim_time + timestep_size
+		if round(sim_time,3) >= end_time + timestep_size:
 			completion_time = time.time() - start_time
 			print "Simulation Complete \n Execution Time: ", round(completion_time,2), " seconds"
-			# print "Calculating Average Delay..."
-			# print ("Average Delay is: ", cm.calculate_delay)
+			print ("Calculating Average Delay...")
+			print ("Average Delay of cars compared to no intersection: ", cm.calculate_delay())
 			print("Initiating Visualization. Please run Rviz")
 			raw_input('Press ENTER to start Visualization')
-			time.sleep(3)
 			visualizeSim.main(cm.car_list, dMax, lane_width, timestep_size, end_time)
 			print("Visualization complete and shutdown successful!")
 			rospy.signal_shutdown("Simulation Complete")
