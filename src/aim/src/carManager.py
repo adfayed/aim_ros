@@ -214,7 +214,7 @@ class car:
 						self.following[t_index] = True
 					else:
 						self.acc[t_index] = line_speedup_acc
-
+            
 
 class carManager:
 	def __init__(self, car_list = []):
@@ -443,6 +443,7 @@ def main():
 	cm = carManager(cars_spawned)
 	start_time = time.time()
 	sim_time = 0
+	#pdb.set_trace()
 	while not rospy.is_shutdown():
 		cm.update(sim_time)
 		sim_time = sim_time + timestep_size

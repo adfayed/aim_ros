@@ -274,9 +274,9 @@ def main(car_list, dMax, lane_width, timestep_size, end_time):
             marker_temp = marker_array.markers.pop(0)
             marker_temp.header.stamp = rospy.Time(0)
             for i in range(len(car_list)):
-                if marker_temp.id == car_list[i].car_id and car_list[i].t[0] <= viz_time*timestep_size:
+                if marker_temp.id == car_list[i].car_id and round(car_list[i].t[0], 2) <= round(viz_time*timestep_size, 2):
                     for j in range(len(car_list[i].t)):
-                        if viz_time*timestep_size == round(car_list[i].t[j],2):
+                        if round(viz_time*timestep_size, 2) == round(car_list[i].t[j],2):
                             marker_temp.pose.position.x = car_list[i].x[j]
                             marker_temp.pose.position.y = car_list[i].y[j]
                             marker_temp.pose.orientation = Quaternion(*tf.transformations.quaternion_from_euler(0, 0, float(math.radians(-car_list[i].heading[j]))))
@@ -298,7 +298,7 @@ def main(car_list, dMax, lane_width, timestep_size, end_time):
                                     marker_temp.color.r = 1.0
                                     marker_temp.color.g = 0.0
                                     marker_temp.color.b = 0.0       
-                        elif viz_time*timestep_size > round(car_list[i].t[-1],2):
+                        elif round(viz_time*timestep_size, 2) > round(car_list[i].t[-1],2):
                             marker_temp.pose.position.x = 2*dMax+6*lane_width
                             marker_temp.pose.position.y = 2*dMax+6*lane_width
             marker_array.markers.append(marker_temp)
@@ -307,6 +307,7 @@ def main(car_list, dMax, lane_width, timestep_size, end_time):
         if viz_time*timestep_size >= end_time:
             rospy.signal_shutdown("Visulization Complete")
         else:
+            # raw_input("Time: %f  Continue?" %(round(viz_time*timestep_size, 2)))
             rate.sleep()
 
 if __name__ == '__main__':
