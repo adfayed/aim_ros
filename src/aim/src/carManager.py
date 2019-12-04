@@ -212,6 +212,8 @@ class carManager:
 						self.car_list[i].max_V,	self.car_list[i].max_A, self.car_list[i].min_A, self.car_list[i].max_lateral_g)
 					if response[0]: 
 						print("Request accepted for Car: ",self.car_list[i].car_id," At time: ",time)
+						if self.car_list[i].lane_id == 1:
+							print("Car %d is in lane 1" %(self.car_list[i].car_id))
 						self.car_list[i].reservation = np.append(self.car_list[i].reservation[0:curr_t_index], np.ones(len(response[1]),dtype=bool))
 						self.car_list[i].x = np.append(self.car_list[i].x[0:curr_t_index], response[1])
 						self.car_list[i].y = np.append(self.car_list[i].y[0:curr_t_index], response[2])
@@ -308,7 +310,7 @@ def main():
 	np.random.seed(1)
 	global x_states, y_states, h_states, timestep_size, num_cars, tSafe, time_to_complete, end_time, dMax, dSafe, lane_width
 	timestep_size = 0.1 # Must be a float
-	num_cars = 40.0 # Must be a float
+	num_cars = 100.0 # Must be a float
 	tSafe = 0.5 # Must be a float
 	time_to_complete = 20.0 # Must be a float
 	end_time = 100.0 # Must be a float
@@ -369,7 +371,7 @@ def main():
 	while not rospy.is_shutdown():
 		cm.update(sim_time)
 		sim_time = sim_time + timestep_size
-		if round(sim_time,3) >= end_time + timestep_size:# or round(sim_time,3) >= 14.3:
+		if round(sim_time,3) >= end_time + timestep_size:		# or round(sim_time,3) >= 11.5:
 			#pdb.set_trace()
 			completion_time = time.time() - start_time
 			print "Simulation Complete \n Execution Time: ", round(completion_time,2), " seconds"
@@ -377,6 +379,7 @@ def main():
 			# print ("Average Delay is: ", cm.calculate_delay)
 			print("Initiating Visualization. Please run Rviz")
 			raw_input('Press ENTER to start Visualization')
+			time.sleep(3)
 			visualizeSim.main(cm.car_list, dMax, lane_width, timestep_size, end_time)
 			print("Visualization complete and shutdown successful!")
 			rospy.signal_shutdown("Simulation Complete")

@@ -51,6 +51,7 @@ class IntersectionManager:
 		self.__dMin = dMin		# Distance after the intersection we stop worrying about a car
 		self.__timestep = timestep		# The amount of time to pass in one time step
 		self.__lane_q = [[], [], [], [], [], [], [], [], [], [], [], []]		# List to indicate which cars are first in the list
+		self.__can_go = [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]		# indicates what time the car in that lane can go (for stop sign)
 		self.__phase = 0		# Used to determine what phase the traffic light policy is in
 		self.__time_to_change = 0		# Used to know when it is ok to change to a different phase in the traffic light policy
 		self.__conflict = False		# Used to determine if the phase needs to change
@@ -104,8 +105,8 @@ class IntersectionManager:
 			# print "Car's velocity: ",car.vel
 			# print "Car's x: ",car.x
 			# print "Car's y: ",car.y
-			success, xs, ys, headings, vs, ts = self.__ourPolicy(car, max(min_v,car.vel))
-			# success, xs, ys, headings, vs, ts = self.__ourPolicy(car, car.desired_vel)
+			# success, xs, ys, headings, vs, ts = self.__ourPolicy(car, max(min_v,car.vel))
+			success, xs, ys, headings, vs, ts = self.__ourPolicy(car, car.desired_vel)
 		elif self.policy == 1:
 			success, xs, ys, headings, vs, ts = self.__dresnerStonePolicy(car)
 		elif self.policy == 2:
@@ -219,7 +220,7 @@ class IntersectionManager:
 				t = col_time_index + 1		# The index of the time array to check for collision
 				# Check the position and heading at a later time until there is no collision
 				while collision:
-					collision, col_time_index, col_counter, reserved_heading, car_heading, col_temp_res, col_indices = self.__collisionDetection([col_x], [col_y], [col_h], [ts[t]], car)
+					collision, new_col_time_index, col_counter, reserved_heading, car_heading, col_temp_res, col_indices = self.__collisionDetection([col_x], [col_y], [col_h], [ts[t]], car)
 					if collision:
 						t += 1
 				col_t = ts[t]
@@ -228,7 +229,7 @@ class IntersectionManager:
 				col_t = ts[col_time_index]
 				i = col_time_index + 1		# The index for the position and heading arrays to check for collisions
 				while collision:
-					collision, col_time_index, col_counter, reserved_heading, car_heading, col_temp_res, col_indices = self.__collisionDetection([xs[i]], [ys[i]], [hs[i]], [col_t], car)
+					collision, new_col_time_index, col_counter, reserved_heading, car_heading, col_temp_res, col_indices = self.__collisionDetection([xs[i]], [ys[i]], [hs[i]], [col_t], car)
 					if collision:
 						i += 1
 				col_x = xs[i]
@@ -239,13 +240,13 @@ class IntersectionManager:
 				tries += 1
 				continue
 			# Check this path
-			collision, col_time_index, col_counter, reserved_heading, car_heading, col_temp_res, col_indices = self.__collisionDetection(col_xs, col_ys, col_hs, col_ts, car)
+			collision, new_col_time_index, col_counter, reserved_heading, car_heading, col_temp_res, col_indices = self.__collisionDetection(col_xs, col_ys, col_hs, col_ts, car)
 
 			# If this new path works, check path from collision point to finish point using desired velo
 			if not collision:
 				i = len(col_xs) - 1
 				end_xs, end_ys, end_hs, end_vs, end_ts = self.__createPartTrajectory(car, col_xs[i], col_ys[i], col_hs[i], col_vs[i], col_ts[i], desired_velo)
-				collision, col_time_index, col_counter, reserved_heading, car_heading, end_temp_res, end_indices = self.__collisionDetection(end_xs, end_ys, end_hs, end_ts, car)
+				collision, new_col_time_index, col_counter, reserved_heading, car_heading, end_temp_res, end_indices = self.__collisionDetection(end_xs, end_ys, end_hs, end_ts, car)
 
 				# If this end portion works, return entire path as success
 				if not collision:
@@ -264,7 +265,7 @@ class IntersectionManager:
 
 				# If this end portion fails, try end portion using the final velocity of the portion above
 				end_xs, end_ys, end_hs, end_vs, end_ts = self.__createPartTrajectory(car, col_xs[i], col_ys[i], col_hs[i], col_vs[i], col_ts[i], col_vs[i])
-				collision, col_time_index, col_counter, reserved_heading, car_heading, end_temp_res, end_indices = self.__collisionDetection(end_xs, end_ys, end_hs, end_ts, car)
+				collision, new_col_time_index, col_counter, reserved_heading, car_heading, end_temp_res, end_indices = self.__collisionDetection(end_xs, end_ys, end_hs, end_ts, car)
 
 				# If this end portion works, return entire path
 				if not collision:
@@ -511,18 +512,23 @@ class IntersectionManager:
 		# if car.x != stop_x or car.y != stop_y:
 			success = False
 			return success, xs, ys, hs, vs, ts
-
-		# Check if the car is clear
-		xs, ys, hs, vs, ts = self.__createFullTrajectory(car, car.desired_vel)
-		collision, col_time_index, col_counter, reserved_heading, car_heading, col_temp_res, col_indices = self.__collisionDetection(xs, ys, hs, ts, car)
-		if not collision:
-			# Add the temp grids back to reservations
-			for i in range(len(col_indices)):
-				self.reservations[col_indices[i]] = col_temp_res[i]
-			success = True
+		if self.can_go[car.lane_id] == round(car.t, 3):
+			self.can_go[car.lane_id] = -1
+			# Check if the car is clear
+			xs, ys, hs, vs, ts = self.__createFullTrajectory(car, car.desired_vel)
+			collision, col_time_index, col_counter, reserved_heading, car_heading, col_temp_res, col_indices = self.__collisionDetection(xs, ys, hs, ts, car)
+			if not collision:
+				# Add the temp grids back to reservations
+				for i in range(len(col_indices)):
+					self.reservations[col_indices[i]] = col_temp_res[i]
+				success = True
+			else:
+				success = False
+			return success, xs, ys, hs, vs, ts
 		else:
-			success = False
-		return success, xs, ys, hs, vs, ts
+			if self.can_go[car.lane_id] == -1:
+				self.can_go[car.lane_id] = round(car.t + 1, 3)
+			return False, xs, ys, hs, vs, ts
 
 	def __collisionDetection(self, xs, ys, hs, ts, car):
 		if len(xs) == 0:
@@ -1492,7 +1498,7 @@ class IntersectionManager:
 					if final_x > self.intersection_size - self.dMax:
 						distance += abs(start_x - final_x)
 					else:
-						distance += abs(start_x - self.intersection_size - self.dMax)
+						distance += abs(start_x - (self.intersection_size - self.dMax))
 				# Add the middle and final portion if there is any
 				if lane == 0:		# Turning right
 					arc_measure = abs(final_h - start_h)
@@ -1517,8 +1523,11 @@ class IntersectionManager:
 							distance += abs(final_y - start_y)
 						else:
 							distance += abs(self.dMax - final_y)
-			delta_t = final_t - start_t
-			# if delta_t == 0:
+			delta_t = round(final_t - start_t, 2)
+			if delta_t == 0:
+				print "final_t = ", final_t, "\tstart_t = ", start_t
+				print("Lane: %d  X: %f  Y: %f  V: %f" %(car.lane_id, car.x, car.y, car.v))
+				raw_input("Continue with car %d" %(car.car_id))
 			# 	delta_t = 1	
 			v = ((2 * distance) / delta_t) - start_v
 			accel = (v - start_v) / delta_t
@@ -1594,9 +1603,9 @@ class IntersectionManager:
 				ts.append(t)
 
 			# Check if the car has reached the final point of the trajectory ..... Do we need to check if there is still time remaining?
-			if final_x != -1 and ((increasing and new_x >= final_x) or (not increasing and new_x <= final_x)):
+			if delta_x != 0 and final_x != -1 and ((increasing and new_x >= final_x) or (not increasing and new_x <= final_x)):
 				return xs, ys, hs, vs, ts
-			if final_y != -1 and ((increasing and new_y >= final_y) or (not increasing and new_y <= final_y)):
+			if delta_y != 0 and final_y != -1 and ((increasing and new_y >= final_y) or (not increasing and new_y <= final_y)):
 				return xs, ys, hs, vs, ts
 
 		####################### Section 2: Intersection path (Turn Left, Straight, Turn Right ##########################
@@ -1654,7 +1663,11 @@ class IntersectionManager:
 			time_left = 0
 
 			# Return if reached final position
-			if final_h != -1 and new_h >= final_h:
+			if final_h == 0:
+				temp_heading = 360
+			else:
+				temp_heading = final_h
+			if final_h != -1 and (new_h >= temp_heading or (final_h == 0 and new_h == final_h)):
 				return xs, ys, hs, vs, ts
 
 			while time_left == 0:
@@ -1686,7 +1699,7 @@ class IntersectionManager:
 					ts.append(t)
 
 				# Return if reached final position
-				if final_h != -1 and new_h >= final_h:
+				if final_h != -1 and (new_h >= temp_heading or (final_h == 0 and new_h == final_h)):
 					return xs, ys, hs, vs, ts
 
 		elif lane == 1:		# Going straight
@@ -1739,9 +1752,9 @@ class IntersectionManager:
 				time_left = 0
 
 			# Check if the car has reached the final point of the trajectory
-			if final_x != -1 and ((increasing and new_x >= final_x) or (not increasing and new_x <= final_x)):
+			if delta_x != 0 and final_x != -1 and ((increasing and new_x >= final_x) or (not increasing and new_x <= final_x)):
 				return xs, ys, hs, vs, ts
-			if final_y != -1 and ((increasing and new_y >= final_y) or (not increasing and new_y <= final_y)):
+			if delta_y != 0 and final_y != -1 and ((increasing and new_y >= final_y) or (not increasing and new_y <= final_y)):
 				return xs, ys, hs, vs, ts
 
 			while time_left == 0:
@@ -1769,9 +1782,9 @@ class IntersectionManager:
 					ts.append(t)
 
 				# Check if the car has reached the final point of the trajectory ..... Do we need to check if there is still time remaining?
-				if final_x != -1 and ((increasing and new_x >= final_x) or (not increasing and new_x <= final_x)):
+				if delta_x != 0 and final_x != -1 and ((increasing and new_x >= final_x) or (not increasing and new_x <= final_x)):
 					return xs, ys, hs, vs, ts
-				if final_y != -1 and ((increasing and new_y >= final_y) or (not increasing and new_y <= final_y)):
+				if delta_y != 0 and final_y != -1 and ((increasing and new_y >= final_y) or (not increasing and new_y <= final_y)):
 					return xs, ys, hs, vs, ts
 
 		elif lane == 2 and start_h != final_h:		# Turning Left
@@ -1898,9 +1911,9 @@ class IntersectionManager:
 		ts.append(t)
 
 		# Check if the car has reached the final point of the trajectory
-		if final_x != -1 and ((increasing and new_x >= final_x) or (not increasing and new_x <= final_x)):
+		if delta_x != 0 and final_x != -1 and ((increasing and new_x >= final_x) or (not increasing and new_x <= final_x)):
 			return xs, ys, hs, vs, ts
-		if final_y != -1 and ((increasing and new_y >= final_y) or (not increasing and new_y <= final_y)):
+		if delta_y != 0 and final_y != -1 and ((increasing and new_y >= final_y) or (not increasing and new_y <= final_y)):
 			return xs, ys, hs, vs, ts
 
 		# Continue until the car reaches a point at the goal
@@ -1921,9 +1934,9 @@ class IntersectionManager:
 			if (increasing and new_y > end_y) or (not increasing and new_y < end_y):
 				break
 			# Check if the car has reached the final point of the trajectory
-			if final_x != -1 and ((increasing and new_x >= final_x) or (not increasing and new_x <= final_x)):
+			if delta_x != 0 and final_x != -1 and ((increasing and new_x >= final_x) or (not increasing and new_x <= final_x)):
 				return xs, ys, hs, vs, ts
-			if final_y != -1 and ((increasing and new_y >= final_y) or (not increasing and new_y <= final_y)):
+			if delta_y != 0 and final_y != -1 and ((increasing and new_y >= final_y) or (not increasing and new_y <= final_y)):
 				return xs, ys, hs, vs, ts
 
 		# Return the trajectory
@@ -2069,12 +2082,20 @@ class IntersectionManager:
 	@conflict.setter
 	def conflict(self, value):
 		self.__conflict = value
+
+	@property
+	def can_go(self):
+		return self.__can_go
+	
+	@can_go.setter
+	def can_go(self, value):
+		self.__can_go = value
 	
 
 def main():
 	rospy.init_node('intersection_manager_server')
 	# rate = rospy.Rate(100.0)
-	gsz = 0.5
+	gsz = 0.75
 	lane_width = 3.66
 	dMax = 148
 	dMin = 50
