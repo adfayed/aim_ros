@@ -266,7 +266,7 @@ def main(car_list, dMax, lane_width, timestep_size, end_time):
         marker.pose.position.x = 0
         marker.pose.position.y = 0
         marker.pose.position.z = 0
-        marker.mesh_resource = "package://aim/meshes/complete.stl"
+        marker.mesh_resource = "package://aim/meshes/tesla_model_s.stl"
         marker_array.markers.append(marker)
     viz_time = 0
     while not rospy.is_shutdown():
