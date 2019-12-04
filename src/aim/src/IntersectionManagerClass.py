@@ -106,7 +106,7 @@ class IntersectionManager:
 			# print "Car's x: ",car.x
 			# print "Car's y: ",car.y
 			# success, xs, ys, headings, vs, ts = self.__ourPolicy(car, max(min_v,car.vel))
-			success, xs, ys, headings, vs, ts = self.__ourPolicy(car, car.desired_vel)
+			success, xs, ys, headings, vs, ts = self.__ourPolicy(car, max(min_v, car.desired_vel))
 		elif self.policy == 1:
 			success, xs, ys, headings, vs, ts = self.__dresnerStonePolicy(car)
 		elif self.policy == 2:
@@ -236,9 +236,9 @@ class IntersectionManager:
 				col_y = ys[i]
 				col_h = hs[i]
 			col_xs, col_ys, col_hs, col_vs, col_ts = self.__createPartTrajectory(car, car.x, car.y, car.heading, car.vel, car.t, None, col_x, col_y, col_h, col_t)
-			if len(col_xs) == 0:
-				tries += 1
-				continue
+			# if len(col_xs) == 0:
+			# 	tries += 1
+			# 	continue
 			# Check this path
 			collision, new_col_time_index, col_counter, reserved_heading, car_heading, col_temp_res, col_indices = self.__collisionDetection(col_xs, col_ys, col_hs, col_ts, car)
 
@@ -532,7 +532,7 @@ class IntersectionManager:
 
 	def __collisionDetection(self, xs, ys, hs, ts, car):
 		if len(xs) == 0:
-			return False, -1, [0, 0, 0, 0], -1, [], []
+			return True, -1, [0, 0, 0, 0], -1, car.heading, [], []
 		car_w = car.width
 		car_l = car.length
 		dSafe = 1
@@ -988,7 +988,7 @@ class IntersectionManager:
 				# Stop if there was a collision
 				if collision:
 					break
-		return collision, time, col_counter, reserved_heading,car_heading, temp_res[0:time], indices[0:time]
+		return collision, time, col_counter, reserved_heading, car_heading, temp_res[0:time], indices[0:time]
 
 	def __createFullTrajectory(self, car, desired_velo):
 		"""
@@ -1570,7 +1570,7 @@ class IntersectionManager:
 		new_x = start_x		# Get the current x of the car
 		new_y = start_y		# Get the current y of the car
 		time_left = 0		# Indicates how much time is left if the car finishes the section without using the whole timestep
-		if (increasing and new_x > end_x) or (not increasing and new_x < end_x) or (increasing and new_y > end_y) or (not increasing and new_y < new_y):
+		if (increasing and new_x > end_x) or (not increasing and new_x < end_x) or (increasing and new_y > end_y) or (not increasing and new_y < end_y):
 			time_left = self.timestep
 		while time_left == 0:
 			# Get the new x and y values based on the velocity and acceleration of the car

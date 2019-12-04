@@ -212,8 +212,8 @@ class carManager:
 						self.car_list[i].max_V,	self.car_list[i].max_A, self.car_list[i].min_A, self.car_list[i].max_lateral_g)
 					if response[0]: 
 						print("Request accepted for Car: ",self.car_list[i].car_id," At time: ",time)
-						if self.car_list[i].lane_id == 1:
-							print("Car %d is in lane 1" %(self.car_list[i].car_id))
+						# if self.car_list[i].lane_id == 1:
+						# 	print("Car %d is in lane 1" %(self.car_list[i].car_id))
 						self.car_list[i].reservation = np.append(self.car_list[i].reservation[0:curr_t_index], np.ones(len(response[1]),dtype=bool))
 						self.car_list[i].x = np.append(self.car_list[i].x[0:curr_t_index], response[1])
 						self.car_list[i].y = np.append(self.car_list[i].y[0:curr_t_index], response[2])
@@ -370,7 +370,7 @@ def main():
 	#pdb.set_trace()
 	while not rospy.is_shutdown():
 		cm.update(sim_time)
-		sim_time = sim_time + timestep_size
+		sim_time = round(sim_time + timestep_size, 2)
 		if round(sim_time,3) >= end_time + timestep_size:		# or round(sim_time,3) >= 11.5:
 			#pdb.set_trace()
 			completion_time = time.time() - start_time
