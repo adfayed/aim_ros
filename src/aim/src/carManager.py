@@ -223,6 +223,12 @@ class carManager:
 	def calculate_delay(self):
 		tot_delay = 0.0
 		num_compl_cars = 0.0
+		##################################################
+		### Arc_length = 2 * pi * R * (C / 360)
+		###		where C = central angel (90 degrees here)
+		##################################################
+		right_turn_dist = 2 * np.pi * (lane_width / 2.0) * (1.0 / 4.0)
+		left_turn_dist = 2 * np.pi * (lane_width * 3.5) * (1.0 / 4.0)
 		for i in range(0,len(self.car_list)):
 			if self.car_list[i].reservation.any():
 				num_compl_cars = num_compl_cars + 1
@@ -230,38 +236,39 @@ class carManager:
 				fin_x, fin_y, fin_t = self.car_list[i]._final_coords()
 				# South lanes
 				if self.car_list[i].lane_id == 6:
-					dist_traveled = dMax + 1.437 + (fin_x - (dMax + 6*lane_width))
+					dist_traveled = dMax + right_turn_dist + (fin_x - (dMax + 6*lane_width))
 				elif self.car_list[i].lane_id == 7:
 					dist_traveled = fin_y
 				elif self.car_list[i].lane_id == 8:
-					dist_traveled = dMax + 10.061 + (dMax - fin_x)
+					dist_traveled = dMax + left_turn_dist + (dMax - fin_x)
 				# East lanes		
 				elif self.car_list[i].lane_id == 3:
-					dist_traveled = dMax + 1.437 + (fin_y - (dMax + 6*lane_width))
+					dist_traveled = dMax + right_turn_dist + (fin_y - (dMax + 6*lane_width))
 				elif self.car_list[i].lane_id == 4:
 					dist_traveled = (2*dMax+6*lane_width) - fin_x
 				elif self.car_list[i].lane_id == 5:
-					dist_traveled = dMax + 10.061 + (dMax - fin_y)
+					dist_traveled = dMax + left_turn_dist + (dMax - fin_y)
 				# North lanes
 				elif self.car_list[i].lane_id == 0:
-					dist_traveled = dMax + 1.437 + (dMax - fin_x)
+					dist_traveled = dMax + right_turn_dist + (dMax - fin_x)
 				elif self.car_list[i].lane_id == 1:
 					dist_traveled = (2*dMax+6*lane_width) - fin_y
 				elif self.car_list[i].lane_id == 2:
-					dist_traveled = dMax + 10.061 + (fin_x - (dMax + 6*lane_width))
+					dist_traveled = dMax + left_turn_dist + (fin_x - (dMax + 6*lane_width))
 				# West lanes
 				elif self.car_list[i].lane_id == 9:
-					dist_traveled = dMax + 1.437 + (dMax - fin_y)
+					dist_traveled = dMax + right_turn_dist + (dMax - fin_y)
 				elif self.car_list[i].lane_id == 10:
 					dist_traveled = fin_x
 				elif self.car_list[i].lane_id == 11:
-					dist_traveled = dMax + 10.061 + (fin_y - (dMax + 6*lane_width))
+					dist_traveled = dMax + left_turn_dist + (fin_y - (dMax + 6*lane_width))
 
 				# No Delay Time
-				no_delay_time = self.car_list[i].vel[0]/dist_traveled
+				no_delay_time = dist_traveled / self.car_list[i].desired_vel
+				# no_delay_time = self.car_list[i].vel[0]/dist_traveled
 
 				# Difference in Delay
-				delay = fin_t - no_delay_time
+				delay = round((fin_t - self.car_list[i].t[0]) - no_delay_time, 3)
 				tot_delay = tot_delay + delay
 			else:
 				print("Car: ", self.car_list[i].car_id," never got a reservation so it is not being considered.")
@@ -385,7 +392,7 @@ def main():
 	np.random.seed(1)
 	global x_states, y_states, h_states, timestep_size, num_cars, tSafe, time_to_complete, end_time, dMax, dSafe, lane_width, dMin
 	timestep_size = 0.1 # Must be a float
-	num_cars = 100.0 # Must be a float
+	num_cars = 150.0 # Must be a float
 	tSafe = 0.5 # Must be a float
 	time_to_complete = 20.0 # Must be a float
 	end_time = 100.0 # Must be a float
@@ -454,6 +461,7 @@ def main():
 			print ("Average Delay of cars compared to no intersection: ", cm.calculate_delay())
 			print("Initiating Visualization. Please run Rviz")
 			raw_input('Press ENTER to start Visualization')
+			time.sleep(3)
 			visualizeSim.main(cm.car_list, dMax, lane_width, timestep_size, end_time)
 			print("Visualization complete and shutdown successful!")
 			rospy.signal_shutdown("Simulation Complete")

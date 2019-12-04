@@ -1526,13 +1526,15 @@ class IntersectionManager:
 			delta_t = round(final_t - start_t, 2)
 			if delta_t == 0:
 				print "final_t = ", final_t, "\tstart_t = ", start_t
-				print("Lane: %d  X: %f  Y: %f  V: %f" %(car.lane_id, car.x, car.y, car.v))
+				print("Lane: %d  X: %f  Y: %f  V: %f  Desired_Vel: %f" %(car.lane_id, car.x, car.y, car.vel, car.desired_vel))
 				raw_input("Continue with car %d" %(car.car_id))
+				return [], [], [], [], []
 			# 	delta_t = 1	
 			v = ((2 * distance) / delta_t) - start_v
 			accel = (v - start_v) / delta_t
-			# Make sure the car is not trying to travel faster than it can
-			if v > car.max_V or v <= 0 or accel > car.max_A or accel < car.min_A:
+			# Make sure the car is not trying to travel too fast or slow
+			min_v = 10
+			if v > car.max_V or v <= min_v or accel > car.max_A or accel < car.min_A:
 				return [], [], [], [], []
 
 		####################### Section 1: Straight path from dMax to intersetion ##########################
@@ -2100,7 +2102,7 @@ def main():
 	dMax = 148
 	dMin = 50
 	timestep = 0.1
-	policy = 1
+	policy = 0
 	IM = IntersectionManager(gsz, dMax, dMin, timestep, lane_width, policy)
 	rospy.spin()
 	# while not rospy.is_shutdown():
