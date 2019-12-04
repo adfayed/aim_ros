@@ -308,10 +308,10 @@ def main():
 	np.random.seed(1)
 	global x_states, y_states, h_states, timestep_size, num_cars, tSafe, time_to_complete, end_time, dMax, dSafe, lane_width
 	timestep_size = 0.1 # Must be a float
-	num_cars = 100.0 # Must be a float
+	num_cars = 40.0 # Must be a float
 	tSafe = 0.5 # Must be a float
 	time_to_complete = 20.0 # Must be a float
-	end_time = 90.0 # Must be a float
+	end_time = 100.0 # Must be a float
 	cars_spawned = []
 	dMax = 148 
 	dSafe = 2
@@ -369,7 +369,7 @@ def main():
 	while not rospy.is_shutdown():
 		cm.update(sim_time)
 		sim_time = sim_time + timestep_size
-		if round(sim_time,3) >= end_time + timestep_size:
+		if round(sim_time,3) >= end_time + timestep_size:# or round(sim_time,3) >= 14.3:
 			#pdb.set_trace()
 			completion_time = time.time() - start_time
 			print "Simulation Complete \n Execution Time: ", round(completion_time,2), " seconds"

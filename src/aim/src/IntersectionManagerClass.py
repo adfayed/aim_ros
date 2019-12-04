@@ -82,6 +82,8 @@ class IntersectionManager:
 			time = 1000
 		T_old = int(time - 1)
 		self.reservations[T_old] = np.full((self.grid_length, self.grid_length), -1)
+		# if cur_t < 30:
+		# 	return False, [], [], [], [], []
 
 		lane = car.lane_id		# Get the lane of the car
 		car_id = car.car_id		# Get the car's id
@@ -134,17 +136,9 @@ class IntersectionManager:
 		return success, xs, ys, headings, vs, ts
 
 	def __ourPolicy(self, car, desired_velo):
-
-		############################################################################################################
-		###
-		### TODO: Figure out why cars are jumping to the bottom left corner
-		### 	  * I think it has to do with starting in the middle of the intersection when creating a trajectory
-		###
-		############################################################################################################
-
 		# First check the path using the desired_velo
 		xs, ys, hs, vs, ts = self.__createFullTrajectory(car, desired_velo)
-		collision, col_time_index, col_counter, col_direction, col_temp_res, col_indices = self.__collisionDetection(xs, ys, hs, ts, car)
+		collision, col_time_index, col_counter, reserved_heading, car_heading, col_temp_res, col_indices = self.__collisionDetection(xs, ys, hs, ts, car)
 
 		# If it works return true
 		if not collision:
@@ -157,22 +151,62 @@ class IntersectionManager:
 		# 	success = False
 		# return success, xs, ys, hs, vs, ts
 
-
 		# If it fails create path based from start to point of collision where car speeds up or slows down
 		slow_down = True
+		can_speed_up = True
+
 		##############################################################
 		###
 		### TODO: Determine if the car needs to slow down or speed up
 		###
 		##############################################################
+		if car_heading <= 180:
+			offset = car_heading
+			if reserved_heading == car_heading:
+				from_direction = 'F'
+			elif reserved_heading > offset and  reserved_heading < 180 + offset:
+				from_direction = 'L'
+			else:
+				from_direction = 'R'
+		else:
+			offset = 360 - car_heading
+			if reserved_heading == car_heading:
+				from_direction = 'F'
+			elif reserved_heading < 360 - offset and reserved_heading > 180 - offset:
+				from_direction = 'R'
+			else:
+				from_direction = 'L'
+
+		if from_direction == 'F':
+			can_speed_up = False
+		elif col_counter[3] > 0:
+			slow_down = False
+		elif from_direction == 'R':
+			if col_counter[1] > col_counter[2]:
+				slow_down = True
+			elif col_counter[2] > col_counter[0]:
+				slow_down = False
+			else:
+				slow_down = True
+		else:
+			if col_counter[1] > col_counter[0]:
+				slow_down = True
+			elif col_counter[0] > col_counter[2]:
+				slow_down = False
+			else:
+				slow_down = True
 
 		######################################################################
 		###
 		### TODO: Handle if the collision happens with a car in the same lane
+		###		  * Maybe do more than just slow down like it will do now
 		###
 		######################################################################
 
 		tries = 0		# Indicates which attempt this is
+		if not can_speed_up:
+			tries = 1
+			slow_down = False
 		while True:
 			if tries == 1:
 				slow_down = not slow_down
@@ -185,7 +219,7 @@ class IntersectionManager:
 				t = col_time_index + 1		# The index of the time array to check for collision
 				# Check the position and heading at a later time until there is no collision
 				while collision:
-					collision, col_time_index, col_counter, col_direction, col_temp_res, col_indices = self.__collisionDetection([col_x], [col_y], [col_h], [ts[t]], car)
+					collision, col_time_index, col_counter, reserved_heading, car_heading, col_temp_res, col_indices = self.__collisionDetection([col_x], [col_y], [col_h], [ts[t]], car)
 					if collision:
 						t += 1
 				col_t = ts[t]
@@ -194,7 +228,7 @@ class IntersectionManager:
 				col_t = ts[col_time_index]
 				i = col_time_index + 1		# The index for the position and heading arrays to check for collisions
 				while collision:
-					collision, col_time_index, col_counter, col_direction, col_temp_res, col_indices = self.__collisionDetection([xs[i]], [ys[i]], [hs[i]], [col_t], car)
+					collision, col_time_index, col_counter, reserved_heading, car_heading, col_temp_res, col_indices = self.__collisionDetection([xs[i]], [ys[i]], [hs[i]], [col_t], car)
 					if collision:
 						i += 1
 				col_x = xs[i]
@@ -202,15 +236,16 @@ class IntersectionManager:
 				col_h = hs[i]
 			col_xs, col_ys, col_hs, col_vs, col_ts = self.__createPartTrajectory(car, car.x, car.y, car.heading, car.vel, car.t, None, col_x, col_y, col_h, col_t)
 			if len(col_xs) == 0:
+				tries += 1
 				continue
 			# Check this path
-			collision, col_time_index, col_counter, col_direction, col_temp_res, col_indices = self.__collisionDetection(col_xs, col_ys, col_hs, col_ts, car)
+			collision, col_time_index, col_counter, reserved_heading, car_heading, col_temp_res, col_indices = self.__collisionDetection(col_xs, col_ys, col_hs, col_ts, car)
 
 			# If this new path works, check path from collision point to finish point using desired velo
 			if not collision:
 				i = len(col_xs) - 1
 				end_xs, end_ys, end_hs, end_vs, end_ts = self.__createPartTrajectory(car, col_xs[i], col_ys[i], col_hs[i], col_vs[i], col_ts[i], desired_velo)
-				collision, col_time_index, col_counter, col_direction, end_temp_res, end_indices = self.__collisionDetection(end_xs, end_ys, end_hs, end_ts, car)
+				collision, col_time_index, col_counter, reserved_heading, car_heading, end_temp_res, end_indices = self.__collisionDetection(end_xs, end_ys, end_hs, end_ts, car)
 
 				# If this end portion works, return entire path as success
 				if not collision:
@@ -229,7 +264,7 @@ class IntersectionManager:
 
 				# If this end portion fails, try end portion using the final velocity of the portion above
 				end_xs, end_ys, end_hs, end_vs, end_ts = self.__createPartTrajectory(car, col_xs[i], col_ys[i], col_hs[i], col_vs[i], col_ts[i], col_vs[i])
-				collision, col_time_index, col_counter, col_direction, end_temp_res, end_indices = self.__collisionDetection(end_xs, end_ys, end_hs, end_ts, car)
+				collision, col_time_index, col_counter, reserved_heading, car_heading, end_temp_res, end_indices = self.__collisionDetection(end_xs, end_ys, end_hs, end_ts, car)
 
 				# If this end portion works, return entire path
 				if not collision:
@@ -273,11 +308,11 @@ class IntersectionManager:
 		min_v = 10
 		# Check the car going at max velocity
 		xs, ys, hs, vs, ts = self.__createFullTrajectory(car, car.max_V)
-		collision, col_time_index, col_counter, col_direction, col_temp_res, col_indices = self.__collisionDetection(xs, ys, hs, ts, car)
+		collision, col_time_index, col_counter, reserved_heading, car_heading, col_temp_res, col_indices = self.__collisionDetection(xs, ys, hs, ts, car)
 		# If there is a collision, check the car going at its current velocity. Limit it to go at least the min velocity
 		if collision:
 			xs, ys, hs, vs, ts = self.__createFullTrajectory(car, max(min_v, car.vel))
-			collision, col_time_index, col_counter, col_direction, col_temp_res, col_indices = self.__collisionDetection(xs, ys, hs, ts, car)
+			collision, col_time_index, col_counter, reserved_heading, car_heading, col_temp_res, col_indices = self.__collisionDetection(xs, ys, hs, ts, car)
 		if not collision:
 			# Add the temp grids back to reservations
 			for i in range(len(col_indices)):
@@ -328,7 +363,7 @@ class IntersectionManager:
 		if car.lane_id in lanes:		# Car is in the lane that is green
 			if not self.conflict:		# No conflict so check the request
 				xs, ys, hs, vs, ts = self.__createFullTrajectory(car, car.desired_vel)
-				collision, col_time_index, col_counter, col_direction, col_temp_res, col_indices = self.__collisionDetection(xs, ys, hs, ts, car)
+				collision, col_time_index, col_counter, reserved_heading, car_heading, col_temp_res, col_indices = self.__collisionDetection(xs, ys, hs, ts, car)
 				self.time_to_change = max(self.time_to_change, self.__getExitTime(car))
 				if not collision:
 					exit_time = self.__getExitTime(car)
@@ -346,7 +381,7 @@ class IntersectionManager:
 					return success, xs, ys, hs, vs, ts
 				else:
 					xs, ys, hs, vs, ts = self.__createFullTrajectory(car, car.desired_vel)
-					collision, col_time_index, col_counter, col_direction, col_temp_res, col_indices = self.__collisionDetection(xs, ys, hs, ts, car)
+					collision, col_time_index, col_counter, reserved_heading, car_heading, col_temp_res, col_indices = self.__collisionDetection(xs, ys, hs, ts, car)
 					if not collision:
 						# Add the temp grids back to reservations
 						for i in range(len(col_indices)):
@@ -388,7 +423,7 @@ class IntersectionManager:
 				self.time_to_change = car.t + min(min_green_time, max_green_time)
 				if car.lane_id in lanes:		# The car is in the lane that is green
 					xs, ys, hs, vs, ts = self.__createFullTrajectory(car, car.desired_vel)
-					collision, col_time_index, col_counter, col_direction, col_temp_res, col_indices = self.__collisionDetection(xs, ys, hs, ts, car)
+					collision, col_time_index, col_counter, reserved_heading, car_heading, col_temp_res, col_indices = self.__collisionDetection(xs, ys, hs, ts, car)
 					self.conflict = False
 					self.time_to_change = max(self.time_to_change, self.__getExitTime(car))
 					if not collision:
@@ -479,7 +514,7 @@ class IntersectionManager:
 
 		# Check if the car is clear
 		xs, ys, hs, vs, ts = self.__createFullTrajectory(car, car.desired_vel)
-		collision, col_time_index, col_counter, col_direction, col_temp_res, col_indices = self.__collisionDetection(xs, ys, hs, ts, car)
+		collision, col_time_index, col_counter, reserved_heading, car_heading, col_temp_res, col_indices = self.__collisionDetection(xs, ys, hs, ts, car)
 		if not collision:
 			# Add the temp grids back to reservations
 			for i in range(len(col_indices)):
@@ -494,19 +529,20 @@ class IntersectionManager:
 			return False, -1, [0, 0, 0, 0], -1, [], []
 		car_w = car.width
 		car_l = car.length
+		dSafe = 1
 
 		# Calculate the initial bounding box
-		box = np.array([[[xs[0] - (car_w / 2)],
-						 [ys[0] + (car_l / 2)],
+		box = np.array([[[xs[0] - (car_w / 2) - (dSafe / 2)],
+						 [ys[0] + (car_l / 2) + (dSafe / 2)],
 						 [1]],
-						[[xs[0] + (car_w / 2)],
-						 [ys[0] + (car_l / 2)],
+						[[xs[0] + (car_w / 2) + (dSafe / 2)],
+						 [ys[0] + (car_l / 2) + (dSafe / 2)],
 						 [1]],
-						[[xs[0] - (car_w / 2)],
-						 [ys[0] - (car_l / 2)],
+						[[xs[0] - (car_w / 2) - (dSafe / 2)],
+						 [ys[0] - (car_l / 2) - (dSafe / 2)],
 						 [1]],
-						[[xs[0] + (car_w / 2)],
-						 [ys[0] - (car_l / 2)],
+						[[xs[0] + (car_w / 2) + (dSafe / 2)],
+						 [ys[0] - (car_l / 2) - (dSafe / 2)],
 						 [1]]])
 		# Rotate so heading in correct direction
 		T = np.array([[1, 0, -xs[0]],
@@ -523,6 +559,7 @@ class IntersectionManager:
 		indices = [i for i in range(len(ts))]  # Hold the index of reservations the grid in temp_res came from
 		collision = False
 		reserved_heading = -1		# Holds the heading of the car that already has a reservation
+		car_heading = car.heading
 
 		# Check for collisions at each time
 		for time in range(len(ts)):
@@ -593,6 +630,7 @@ class IntersectionManager:
 						collision = True
 						col_counter[c_pos[line]] += 1
 						reserved_heading = self.reservations[res_index][grid_y][grid_x]
+						car_heading = hs[time]
 					# Set the grid square to occupied
 					temp_res[time][grid_y][grid_x] = hs[time]
 					# Get the next reference point
@@ -607,6 +645,7 @@ class IntersectionManager:
 							collision = True
 							col_counter[c_pos[line]] += 1
 							reserved_heading = self.reservations[res_index][grid_y][grid_x - 1]
+							car_heading = hs[time]
 						temp_res[time][grid_y][grid_x - 1] = hs[time]
 					if on_bottom_line and grid_y > 0:
 						# Check the grid bellow
@@ -614,6 +653,7 @@ class IntersectionManager:
 							collision = True
 							col_counter[c_pos[line]] += 1
 							reserved_heading = self.reservations[res_index][grid_y - 1][grid_x]
+							car_heading = hs[time]
 						temp_res[time][grid_y - 1][grid_x] = hs[time]
 					if on_left_line and on_left_line and grid_x > 0 and grid_y > 0:
 						# Check the grid bellow and to the left
@@ -621,6 +661,7 @@ class IntersectionManager:
 							collision = True
 							col_counter[c_pos[line]] += 1
 							reserved_heading = self.reservations[res_index][grid_y - 1][grid_x - 1]
+							car_heading = hs[time]
 						temp_res[time][grid_y - 1][grid_x - 1] = hs[time]
 					# Get the slope of the line
 					delta_x = np.around(end_x - start_x, decimals=7)
@@ -651,6 +692,7 @@ class IntersectionManager:
 									collision = True
 									col_counter[c_pos[line]] += 1
 									reserved_heading = self.reservations[res_index][grid_y][grid_x - 1]
+									car_heading = hs[time]
 								temp_res[time][grid_y][grid_x - 1] = hs[time]
 						else:  # Go up and right
 							grid_x += 1
@@ -662,10 +704,12 @@ class IntersectionManager:
 								collision = True
 								col_counter[c_pos[line]] += 1
 								reserved_heading = self.reservations[res_index][grid_y - 1][grid_x]
+								car_heading = hs[time]
 							if self.reservations[res_index][grid_y][grid_x - 1] != -1:
 								collision = True
 								col_counter[c_pos[line]] += 1
 								reserved_heading = self.reservations[res_index][grid_y][grid_x - 1]
+								car_heading = hs[time]
 							temp_res[time][grid_y - 1][grid_x] = hs[time]
 							temp_res[time][grid_y][grid_x - 1] = hs[time]
 						# Make sure we are not trying to mark a grid off the intersection
@@ -676,6 +720,7 @@ class IntersectionManager:
 							collision = True
 							col_counter[c_pos[line]] += 1
 							reserved_heading = self.reservations[res_index][grid_y][grid_x]
+							car_heading = hs[time]
 						# Set the grid square to occupied
 						temp_res[time][grid_y][grid_x] = hs[time]
 						# Get the next reference point
@@ -708,6 +753,7 @@ class IntersectionManager:
 						collision = True
 						col_counter[c_pos[line]] += 1
 						reserved_heading = self.reservations[res_index][grid_y][grid_x]
+						car_heading = hs[time]
 					# Set the grid square to occupied
 					temp_res[time][grid_y][grid_x] = hs[time]
 					check_x = (grid_x + 1) * self.grid_size
@@ -721,6 +767,7 @@ class IntersectionManager:
 							collision = True
 							col_counter[c_pos[line]] += 1
 							reserved_heading = self.reservations[res_index][grid_y][grid_x - 1]
+							car_heading = hs[time]
 						temp_res[time][grid_y][grid_x - 1] = hs[time]
 					if on_bottom_line and grid_y > 0:
 						# Check the grid below
@@ -728,6 +775,7 @@ class IntersectionManager:
 							collision = True
 							col_counter[c_pos[line]] += 1
 							reserved_heading = self.reservations[res_index][grid_y - 1][grid_x]
+							car_heading = hs[time]
 						temp_res[time][grid_y - 1][grid_x] = hs[time]
 					# Get the slope of the line
 					delta_x = np.around(end_x - start_x, decimals=7)
@@ -756,6 +804,7 @@ class IntersectionManager:
 									collision = True
 									col_counter[c_pos[line]] += 1
 									reserved_heading = self.reservations[res_index][grid_y + 1][grid_x]
+									car_heading = hs[time]
 								temp_res[time][grid_y + 1][grid_x] = hs[time]
 						elif temp_m > m:  # Go down
 							grid_y -= 1
@@ -770,10 +819,12 @@ class IntersectionManager:
 								collision = True
 								col_counter[c_pos[line]] += 1
 								reserved_heading = self.reservations[res_index][grid_y + 1][grid_x]
+								car_heading = hs[time]
 							if self.reservations[res_index][grid_y][grid_x - 1] != -1:
 								collision = True
 								col_counter[c_pos[line]] += 1
 								reserved_heading = self.reservations[res_index][grid_y][grid_x - 1]
+								car_heading = hs[time]
 							temp_res[time][grid_y + 1][grid_x] = hs[time]
 							temp_res[time][grid_y][grid_x - 1] = hs[time]
 						# Make sure we are not trying to mark a grid off the intersection
@@ -784,6 +835,7 @@ class IntersectionManager:
 							collision = True
 							col_counter[c_pos[line]] += 1
 							reserved_heading = self.reservations[res_index][grid_y][grid_x]
+							car_heading = hs[time]
 						# Set the grid space to occupied
 						temp_res[time][grid_y][grid_x] = hs[time]
 						# Get the next reference point
@@ -817,6 +869,7 @@ class IntersectionManager:
 						collision = True
 						col_counter[c_pos[line]] += 1
 						reserved_heading = self.reservations[res_index][grid_y][grid_x]
+						car_heading = hs[time]
 					# Set the grid square to occupied
 					temp_res[time][grid_y][grid_x] = hs[time]
 					# Get the reference point
@@ -829,6 +882,7 @@ class IntersectionManager:
 							collision = True
 							col_counter[c_pos[line]] += 1
 							reserved_heading = self.reservations[res_index][grid_y][grid_x - 1]
+							car_heading = hs[time]
 						temp_res[time][grid_y][grid_x - 1] = hs[time]
 					while check_y >= end_y:
 						grid_y -= 1
@@ -842,12 +896,14 @@ class IntersectionManager:
 								collision = True
 								col_counter[c_pos[line]] += 1
 								reserved_heading = self.reservations[res_index][grid_y][grid_x - 1]
+								car_heading = hs[time]
 							temp_res[time][grid_y][grid_x - 1] = hs[time]
 						# Check if the current grid is already occupied
 						if self.reservations[res_index][grid_y][grid_x] != -1:
 							collision = True
 							col_counter[c_pos[line]] += 1
 							reserved_heading = self.reservations[res_index][grid_y][grid_x]
+							car_heading = hs[time]
 						# Set the grid square to occupied
 						temp_res[time][grid_y][grid_x] = hs[time]
 						# Get the next reference point
@@ -880,6 +936,7 @@ class IntersectionManager:
 						collision = True
 						col_counter[c_pos[line]] += 1
 						reserved_heading = self.reservations[res_index][grid_y][grid_x]
+						car_heading = hs[time]
 					# Set the grid square to occupied
 					temp_res[time][grid_y][grid_x] = hs[time]
 					# Get the next reference point
@@ -892,6 +949,7 @@ class IntersectionManager:
 							collision = True
 							col_counter[c_pos[line]] += 1
 							reserved_heading = self.reservations[res_index][grid_y - 1][grid_x]
+							car_heading = hs[time]
 						temp_res[time][grid_y - 1][grid_x] = hs[time]
 					while check_x >= end_x:
 						grid_x -= 1
@@ -905,12 +963,14 @@ class IntersectionManager:
 								collision = True
 								col_counter[c_pos[line]] += 1
 								reserved_heading = self.reservations[res_index][grid_y - 1][grid_x]
+								car_heading = hs[time]
 							temp_res[time][grid_y - 1][grid_x] = hs[time]
 						# Check if it is already occupied
 						if self.reservations[res_index][grid_y][grid_x] != -1:
 							collision = True
 							col_counter[c_pos[line]] += 1
 							reserved_heading = self.reservations[res_index][grid_y][grid_x]
+							car_heading = hs[time]
 						# Set the grid square to occupied
 						temp_res[time][grid_y][grid_x] = hs[time]
 						# Get the next reference point
@@ -922,7 +982,7 @@ class IntersectionManager:
 				# Stop if there was a collision
 				if collision:
 					break
-		return collision, time, col_counter, reserved_heading, temp_res[0:time], indices[0:time]
+		return collision, time, col_counter, reserved_heading,car_heading, temp_res[0:time], indices[0:time]
 
 	def __createFullTrajectory(self, car, desired_velo):
 		"""
@@ -953,7 +1013,7 @@ class IntersectionManager:
 			accel = min(car.max_A, delta_v / 5)
 			speeding_up = True
 		else:
-			accel = max(-car.min_A, delta_v / 5)
+			accel = max(car.min_A, delta_v / 5)
 			speeding_up = False
 
 		####################### Section 1: Straight path from dMax to intersetion ##########################
@@ -1328,7 +1388,7 @@ class IntersectionManager:
 				accel = min(car.max_A, delta_v / 5)
 				speeding_up = True
 			else:
-				accel = max(-car.min_A, delta_v / 5)
+				accel = max(car.min_A, delta_v / 5)
 				speeding_up = False
 		else:
 			lane = car.lane_id % 3
@@ -1458,10 +1518,12 @@ class IntersectionManager:
 						else:
 							distance += abs(self.dMax - final_y)
 			delta_t = final_t - start_t
+			# if delta_t == 0:
+			# 	delta_t = 1	
 			v = ((2 * distance) / delta_t) - start_v
 			accel = (v - start_v) / delta_t
 			# Make sure the car is not trying to travel faster than it can
-			if v > car.max_V:
+			if v > car.max_V or v <= 0 or accel > car.max_A or accel < car.min_A:
 				return [], [], [], [], []
 
 		####################### Section 1: Straight path from dMax to intersetion ##########################
@@ -1570,6 +1632,12 @@ class IntersectionManager:
 				end_x = -1
 				end_y = -1
 				end_h = 0
+
+			####################################################
+			###
+			### TODO: Fix this leftover so it doesn't overshoot
+			###
+			####################################################
 
 			# Account for the leftover time from the last section
 			new_x, new_y, new_h = self.__nextRightPoint(heading, velo, accel, time_left, center_x, center_y)
