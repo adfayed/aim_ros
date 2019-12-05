@@ -308,7 +308,7 @@ class IntersectionManager:
 		"""
 		min_v = 10
 		# Check the car going at max velocity
-		xs, ys, hs, vs, ts = self.__createFullTrajectory(car, car.max_V)
+		xs, ys, hs, vs, ts = self.__createFullTrajectory(car, car.desired_vel)
 		collision, col_time_index, col_counter, reserved_heading, car_heading, col_temp_res, col_indices = self.__collisionDetection(xs, ys, hs, ts, car)
 		# If there is a collision, check the car going at its current velocity. Limit it to go at least the min velocity
 		if collision:
@@ -363,7 +363,8 @@ class IntersectionManager:
 		# When car requests:
 		if car.lane_id in lanes:		# Car is in the lane that is green
 			if not self.conflict:		# No conflict so check the request
-				xs, ys, hs, vs, ts = self.__createFullTrajectory(car, car.desired_vel)
+				# xs, ys, hs, vs, ts = self.__createFullTrajectory(car, car.desired_vel)
+				xs, ys, hs, vs, ts = self.__createFullTrajectory(car,20.0)
 				collision, col_time_index, col_counter, reserved_heading, car_heading, col_temp_res, col_indices = self.__collisionDetection(xs, ys, hs, ts, car)
 				self.time_to_change = max(self.time_to_change, self.__getExitTime(car))
 				if not collision:
@@ -381,7 +382,8 @@ class IntersectionManager:
 				if exit_time > self.time_to_change:		# The car cannot make it through the intersection
 					return success, xs, ys, hs, vs, ts
 				else:
-					xs, ys, hs, vs, ts = self.__createFullTrajectory(car, car.desired_vel)
+					# xs, ys, hs, vs, ts = self.__createFullTrajectory(car, car.desired_vel)
+					xs, ys, hs, vs, ts = self.__createFullTrajectory(car, 20.0)
 					collision, col_time_index, col_counter, reserved_heading, car_heading, col_temp_res, col_indices = self.__collisionDetection(xs, ys, hs, ts, car)
 					if not collision:
 						# Add the temp grids back to reservations
@@ -423,7 +425,8 @@ class IntersectionManager:
 						break
 				self.time_to_change = car.t + min(min_green_time, max_green_time)
 				if car.lane_id in lanes:		# The car is in the lane that is green
-					xs, ys, hs, vs, ts = self.__createFullTrajectory(car, car.desired_vel)
+					# xs, ys, hs, vs, ts = self.__createFullTrajectory(car, car.desired_vel)
+					xs, ys, hs, vs, ts = self.__createFullTrajectory(car, 20.0)
 					collision, col_time_index, col_counter, reserved_heading, car_heading, col_temp_res, col_indices = self.__collisionDetection(xs, ys, hs, ts, car)
 					self.conflict = False
 					self.time_to_change = max(self.time_to_change, self.__getExitTime(car))
