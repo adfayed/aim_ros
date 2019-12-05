@@ -1279,7 +1279,7 @@ def main():
 	dMax = 148
 	dMin = 50
 	timestep = 0.1
-	policy = 1
+	policy = 0
 	IM = IntersectionManager(gsz, dMax, dMin, timestep, lane_width, policy)
 	rospy.spin()
 	# while not rospy.is_shutdown():
