@@ -18,6 +18,7 @@ To run follow the steps below:
 5. run roslaunch aim aim.launch
 
 REFERENCES
+
 [1] The Texas A&M Transportation Institute.
 2019 Urban Mobility Report. Texas, Aug.
 2019. Retrieved from
