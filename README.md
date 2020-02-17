@@ -1,11 +1,13 @@
 # Autonomous Intersection Management (AIM) for multi-agent fully autonomous vehicles
-4-way 3-dedicated-lane autonomous intersection management system implemented in ros assuming fully autonomous (level 5) vehicles 
+Description: 4-way 3-dedicated-lane autonomous intersection management system implemented in ros assuming fully autonomous (level 5) vehicles 
 
+Authors 
 Ahmed Fayed: Fayed@usc.edu & Alex Winger: Winger@usc.edu
 
-Designed for CS646 Coordinated Mobile Robotics
 
-To run follow the steps below:
+## Deployment
+
+To run this project please follow the steps below:
 
 1. Clone repository into local folder
 
@@ -17,7 +19,9 @@ To run follow the steps below:
 
 5. run roslaunch aim aim.launch
 
-REFERENCES
+Designed for CS646 Coordinated Mobile Robotics
+
+## REFERENCES
 
 [1] The Texas A&M Transportation Institute.
 2019 Urban Mobility Report. Texas, Aug.
