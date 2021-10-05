@@ -11,13 +11,13 @@ To run this project please follow the steps below:
 
 Clone repository into local folder and run:
 
-  cd aim_ros (Go to the reepository directory)
+    cd aim_ros (Go to the reepository directory)
 
-  catkin_make
+    catkin_make
 
-  source aim_ros/devel/setup.bash
+    source aim_ros/devel/setup.bash
   
-  roslaunch aim aim.launch
+    roslaunch aim aim.launch
 
 Designed for CS646 Coordinated Mobile Robotics
 
