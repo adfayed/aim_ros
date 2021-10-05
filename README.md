@@ -9,15 +9,15 @@ Ahmed Fayed: Fayed@usc.edu & Alex Winger: Winger@usc.edu
 
 To run this project please follow the steps below:
 
-1. Clone repository into local folder
+Clone repository into local folder and run:
 
-2. cd aim_ros (Go to the reepository directory)
+  cd aim_ros (Go to the reepository directory)
 
-3. run catkin_make
+  catkin_make
 
-4. source aim_ros/devel/setup.bash
-
-5. run roslaunch aim aim.launch
+  source aim_ros/devel/setup.bash
+  
+  roslaunch aim aim.launch
 
 Designed for CS646 Coordinated Mobile Robotics
 
